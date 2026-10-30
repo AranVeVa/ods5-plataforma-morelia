@@ -1,50 +1,66 @@
 "use client";
 
 import React, { useState } from "react";
-import { Briefcase, CheckCircle, AlertOctagon, TrendingUp, Sparkles, RefreshCw } from "lucide-react";
+import { Briefcase, CheckCircle, AlertOctagon, TrendingUp, Sparkles, RefreshCw, DollarSign, Calendar } from "lucide-react";
 import confetti from "canvas-confetti";
+import { sound } from "@/utils/audio";
 
 interface RoleScenario {
   id: string;
   position: string;
+  sector: string;
   department: string;
   maleSalary: number;
   femaleSalary: number;
-  femalePromotionRate: number; // percentage
+  femalePromotionRate: number;
   malePromotionRate: number;
   responsibilities: string;
 }
 
 const INITIAL_ROLES: RoleScenario[] = [
   {
-    id: "dev",
-    position: "Desarrollador/a de Software Senior",
-    department: "Tecnología e Innovación",
-    maleSalary: 42000,
-    femaleSalary: 33500,
+    id: "tech",
+    position: "Ingeniería de Software Senior",
+    sector: "Tecnología e Innovación",
+    department: "Desarrollo Cloud & IA",
+    maleSalary: 45000,
+    femaleSalary: 34000,
+    femalePromotionRate: 25,
+    malePromotionRate: 70,
+    responsibilities: "Misma experiencia (6 años), certificaciones equivalentes y gestión del mismo volumen de código y entregables.",
+  },
+  {
+    id: "health",
+    position: "Especialista Médica y Cirugía",
+    sector: "Salud y Hospitales",
+    department: "Cirugía General",
+    maleSalary: 52000,
+    femaleSalary: 41000,
+    femalePromotionRate: 30,
+    malePromotionRate: 75,
+    responsibilities: "Mismo número de guardias, intervenciones quirúrgicas y alta satisfacción hospitalaria de pacientes.",
+  },
+  {
+    id: "finance",
+    position: "Dirección de Finanzas y Auditoría",
+    sector: "Corporativo y Comercio",
+    department: "Contraloría General",
+    maleSalary: 60000,
+    femaleSalary: 48000,
+    femalePromotionRate: 35,
+    malePromotionRate: 80,
+    responsibilities: "Supervisión de balances anuales idénticos y cumplimiento fiscal estricto.",
+  },
+  {
+    id: "education",
+    position: "Cátedra Universitaria y Posgrado",
+    sector: "Educación Superior",
+    department: "Investigación Científica",
+    maleSalary: 38000,
+    femaleSalary: 29500,
     femalePromotionRate: 20,
     malePromotionRate: 65,
-    responsibilities: "Misma experiencia (5 años), mismas horas y metas de entrega idénticas.",
-  },
-  {
-    id: "admin",
-    position: "Gerente de Finanzas y Operaciones",
-    department: "Administración",
-    maleSalary: 55000,
-    femaleSalary: 45000,
-    femalePromotionRate: 30,
-    malePromotionRate: 70,
-    responsibilities: "Mismo nivel de maestría y supervisión del mismo volumen presupuestal.",
-  },
-  {
-    id: "support",
-    position: "Especialista en Atención y Soporte",
-    department: "Operaciones",
-    maleSalary: 18000,
-    femaleSalary: 15200,
-    femalePromotionRate: 25,
-    malePromotionRate: 50,
-    responsibilities: "Mismo índice de satisfacción de clientes y resolución de tickets.",
+    responsibilities: "Misma cantidad de horas frente a grupo, publicaciones indexadas y tutorías académicas.",
   },
 ];
 
@@ -54,49 +70,62 @@ export default function IgualSalario() {
 
   const currentRole = roles[selectedIdx];
 
-  // Current wage gap calculation
   const salaryDiff = currentRole.maleSalary - currentRole.femaleSalary;
   const gapPercentage = ((salaryDiff / currentRole.maleSalary) * 100).toFixed(1);
 
+  // 10-year cumulative wage loss calculation
+  const cumulativeLoss10Years = Math.max(0, salaryDiff * 12 * 10);
+
   const updateFemaleSalary = (newSalary: number) => {
+    sound.playClick();
     setRoles((prev) =>
       prev.map((r, i) => (i === selectedIdx ? { ...r, femaleSalary: newSalary } : r))
     );
   };
 
   const updateFemalePromotion = (newRate: number) => {
+    sound.playClick();
     setRoles((prev) =>
       prev.map((r, i) => (i === selectedIdx ? { ...r, femalePromotionRate: newRate } : r))
     );
   };
 
-  const isRoleEquitable = Math.abs(salaryDiff) <= 500 && Math.abs(currentRole.malePromotionRate - currentRole.femalePromotionRate) <= 5;
+  const isRoleEquitable =
+    Math.abs(salaryDiff) <= 500 &&
+    Math.abs(currentRole.malePromotionRate - currentRole.femalePromotionRate) <= 5;
 
-  const triggerCelebration = () => {
+  const handleApplyParity = () => {
+    sound.playPowerup();
+    updateFemaleSalary(currentRole.maleSalary);
+    updateFemalePromotion(currentRole.malePromotionRate);
+    sound.playCelebration();
     confetti({
-      particleCount: 70,
-      spread: 60,
-      origin: { y: 0.6 }
+      particleCount: 80,
+      spread: 70,
+      origin: { y: 0.6 },
     });
   };
 
   return (
-    <div className="bg-white rounded-3xl p-6 md:p-8 shadow-xl border border-indigo-100 max-w-4xl mx-auto">
+    <div className="bg-gradient-to-br from-white via-violet-50/20 to-purple-50/20 rounded-3xl p-6 md:p-8 shadow-xl border border-indigo-100 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
         <div>
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-violet-100 text-violet-800">
-            <Briefcase className="w-4 h-4" /> Nivel Juvenil (14+ años) • Justicia Laboral y Brecha Salarial
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-violet-100 text-violet-800 border border-violet-200">
+            <Briefcase className="w-4 h-4" /> Nivel Juvenil (14+ años) • Justicia Laboral y LFT Art. 86
           </span>
-          <h2 className="text-2xl md:text-3xl font-extrabold text-slate-800 mt-2">
+          <h2 className="text-2xl md:text-3xl font-black text-slate-900 mt-2">
             💼 A Igual Trabajo, Igual Salario
           </h2>
           <p className="text-slate-600 text-sm mt-1">
-            Simulador de auditoría salarial y corporativa. Ajusta los controles para erradicar la brecha sin comprometer presupuestos.
+            Simulador de auditoría salarial. Modifica las políticas laborales para erradicar la brecha de género.
           </p>
         </div>
         <button
-          onClick={() => setRoles(INITIAL_ROLES)}
+          onClick={() => {
+            sound.playPowerup();
+            setRoles(INITIAL_ROLES);
+          }}
           className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" /> Reestablecer auditoría
@@ -108,10 +137,13 @@ export default function IgualSalario() {
         {roles.map((r, idx) => (
           <button
             key={r.id}
-            onClick={() => setSelectedIdx(idx)}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            onClick={() => {
+              sound.playClick();
+              setSelectedIdx(idx);
+            }}
+            className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all ${
               selectedIdx === idx
-                ? "bg-violet-600 text-white shadow-md"
+                ? "bg-violet-600 text-white shadow-md scale-102"
                 : "bg-slate-100 text-slate-700 hover:bg-slate-200"
             }`}
           >
@@ -121,118 +153,119 @@ export default function IgualSalario() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8 mt-6">
-        {/* Sliders & Audit adjustment */}
-        <div className="md:col-span-7 bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-6">
+        {/* Sliders & Adjustments */}
+        <div className="md:col-span-7 bg-white/90 p-6 rounded-3xl border-2 border-slate-200/80 shadow-sm space-y-6">
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Puesto Auditado: {currentRole.department}
+            <span className="text-[11px] font-black uppercase tracking-wider text-violet-700 block">
+              Sector: {currentRole.sector} • {currentRole.department}
             </span>
-            <p className="text-xs text-slate-600 mt-1">
+            <p className="text-xs text-slate-600 mt-1 leading-relaxed">
               {currentRole.responsibilities}
             </p>
           </div>
 
-          {/* Female Salary Slider */}
+          {/* Salary Adjustment */}
           <div>
-            <div className="flex justify-between items-center mb-1">
-              <label htmlFor="salary-slider" className="text-xs font-bold text-slate-800">
-                Ajuste Salario Femenino:
-              </label>
-              <span className="text-sm font-black text-violet-700 bg-violet-100 px-3 py-0.5 rounded-lg">
+            <div className="flex justify-between items-center mb-1 text-xs font-bold text-slate-800">
+              <span>Remuneración Mensual de la Profesionista:</span>
+              <span className="text-sm font-black text-violet-700 bg-violet-100 px-3 py-0.5 rounded-xl">
                 ${currentRole.femaleSalary.toLocaleString("es-MX")} MXN
               </span>
             </div>
             <input
-              id="salary-slider"
               type="range"
-              min="20000"
-              max="65000"
+              min="25000"
+              max="70000"
               step="500"
               value={currentRole.femaleSalary}
               onChange={(e) => updateFemaleSalary(Number(e.target.value))}
-              className="w-full accent-violet-600 cursor-pointer h-2 bg-violet-200 rounded-lg"
+              className="w-full accent-violet-600 cursor-pointer h-2 bg-violet-100 rounded-lg"
             />
             <div className="flex justify-between text-[11px] text-slate-500 mt-1">
-              <span>Salario Masculino (Referencia fija): <strong>${currentRole.maleSalary.toLocaleString("es-MX")} MXN</strong></span>
+              <span>Salario Masculino (Par): <strong>${currentRole.maleSalary.toLocaleString("es-MX")} MXN</strong></span>
             </div>
           </div>
 
-          {/* Promotion Access Slider */}
+          {/* Promotion Slider */}
           <div>
-            <div className="flex justify-between items-center mb-1">
-              <label htmlFor="promo-slider" className="text-xs font-bold text-slate-800">
-                Tasa de Acceso a Ascensos Femeninos (Romper techo de cristal):
-              </label>
-              <span className="text-sm font-black text-indigo-700 bg-indigo-100 px-3 py-0.5 rounded-lg">
+            <div className="flex justify-between items-center mb-1 text-xs font-bold text-slate-800">
+              <span>Tasa de Ascensos Directivos para Mujeres:</span>
+              <span className="text-sm font-black text-indigo-700 bg-indigo-100 px-3 py-0.5 rounded-xl">
                 {currentRole.femalePromotionRate}%
               </span>
             </div>
             <input
-              id="promo-slider"
               type="range"
               min="10"
               max="90"
               value={currentRole.femalePromotionRate}
               onChange={(e) => updateFemalePromotion(Number(e.target.value))}
-              className="w-full accent-indigo-600 cursor-pointer h-2 bg-indigo-200 rounded-lg"
+              className="w-full accent-indigo-600 cursor-pointer h-2 bg-indigo-100 rounded-lg"
             />
             <span className="text-[11px] text-slate-500">
-              Tasa de ascensos masculinos para este puesto: {currentRole.malePromotionRate}%.
+              Tasa de ascensos para hombres: {currentRole.malePromotionRate}%.
             </span>
           </div>
 
-          {/* Quick Equilibrium Action */}
           <button
-            onClick={() => {
-              updateFemaleSalary(currentRole.maleSalary);
-              updateFemalePromotion(currentRole.malePromotionRate);
-              triggerCelebration();
-            }}
-            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow transition-colors flex items-center justify-center gap-2"
+            onClick={handleApplyParity}
+            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-2xl shadow transition-colors flex items-center justify-center gap-2"
           >
-            <CheckCircle className="w-4 h-4" /> Aplicar Principio Constitucional: Igual Trabajo = Igual Remuneración
+            <CheckCircle className="w-4 h-4" /> Aplicar Principio de Igual Remuneración (LFT Art. 86)
           </button>
         </div>
 
-        {/* Audit Status Card */}
-        <div className="md:col-span-5 flex flex-col justify-between">
-          <div className={`p-6 rounded-2xl border-2 transition-all ${isRoleEquitable ? "bg-emerald-50 border-emerald-300" : "bg-rose-50 border-rose-300"}`}>
+        {/* Audit Status & Lifetime Impact */}
+        <div className="md:col-span-5 flex flex-col justify-between space-y-4">
+          <div
+            className={`p-6 rounded-3xl border-2 transition-all ${
+              isRoleEquitable ? "bg-emerald-50 border-emerald-300" : "bg-rose-50 border-rose-300"
+            }`}
+          >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
-                Auditoría Salarial
+              <span className="text-xs font-black uppercase tracking-wider text-slate-600">
+                Resultado de Auditoría
               </span>
               {isRoleEquitable ? (
                 <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-200 text-emerald-900 flex items-center gap-1">
-                  <CheckCircle className="w-3.5 h-3.5" /> Equitativo
+                  <CheckCircle className="w-3.5 h-3.5" /> Certificado en Paridad
                 </span>
               ) : (
                 <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-rose-200 text-rose-900 flex items-center gap-1">
-                  <AlertOctagon className="w-3.5 h-3.5" /> Brecha Activa
+                  <AlertOctagon className="w-3.5 h-3.5" /> Brecha Discriminatoria
                 </span>
               )}
             </div>
 
             <div className="mt-4">
-              <span className="text-xs text-slate-600 block">Diferencia Salarial Mensual:</span>
+              <span className="text-xs text-slate-600 block">Diferencia Mensual:</span>
               <p className={`text-3xl font-black mt-1 ${isRoleEquitable ? "text-emerald-700" : "text-rose-700"}`}>
-                {salaryDiff <= 0 ? "$0 MXN (Paridad)" : `-$${salaryDiff.toLocaleString("es-MX")} MXN`}
+                {salaryDiff <= 0 ? "$0 MXN (Paridad Plena)" : `-$${salaryDiff.toLocaleString("es-MX")} MXN`}
               </p>
               <span className="text-xs font-semibold text-slate-500 block mt-1">
-                Brecha de género en este puesto: <strong>{Number(gapPercentage) > 0 ? `${gapPercentage}% menos para la mujer` : "0% (Sin discriminación)"}</strong>
+                Brecha porcentual: <strong>{Number(gapPercentage) > 0 ? `${gapPercentage}% de penalización por género` : "0% (Igualdad salarial)"}</strong>
               </span>
             </div>
 
-            <p className="text-xs text-slate-700 mt-4 leading-relaxed bg-white/70 p-3 rounded-xl border border-slate-200">
-              {isRoleEquitable
-                ? "¡Certificación de Igualdad Laboral y No Discriminación alcanzada! La empresa remunera según capacidad y responsabilidad, sin sesgos de género."
-                : "Se detecta discriminación salarial indirecta. A pesar de contar con el mismo perfil y horas laborales, se remunera con menor salario a la colaboradora."}
-            </p>
+            {/* 10-year cumulative loss indicator */}
+            <div className="mt-4 p-3 rounded-2xl bg-white/80 border border-slate-200 text-xs">
+              <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                <Calendar className="w-4 h-4 text-violet-600" />
+                <span>Pérdida acumulada a 10 años:</span>
+              </div>
+              <p className="text-base font-black text-rose-700 mt-0.5">
+                ${cumulativeLoss10Years.toLocaleString("es-MX")} MXN
+              </p>
+              <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
+                Impacta directamente el fondo de retiro, acceso a créditos de vivienda y bienestar familiar.
+              </p>
+            </div>
           </div>
 
-          <div className="mt-4 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-start gap-3">
+          <div className="p-4 rounded-3xl bg-indigo-50 border border-indigo-100 flex items-start gap-3">
             <Sparkles className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
             <p className="text-xs text-indigo-950">
-              <strong>Marco Legal (Ley Federal del Trabajo, Art. 86):</strong> A trabajo igual, desempeñado en puesto, jornada y condiciones de eficiencia también iguales, debe corresponder salario igual.
+              <strong>Impacto Sostenible (ODS 5.1):</strong> Cerrar la brecha salarial eleva el bienestar general, reduce la pobreza y potencia el crecimiento económico en Michoacán.
             </p>
           </div>
         </div>
