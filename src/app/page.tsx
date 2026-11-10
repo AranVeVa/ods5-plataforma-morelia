@@ -12,7 +12,9 @@ import {
   FileText,
   ShieldCheck,
   CheckCircle2,
-  BookOpen
+  BookOpen,
+  ShieldAlert,
+  ArrowRight
 } from "lucide-react";
 
 import SemaforoContacto from "@/components/games/SemaforoContacto";
@@ -23,6 +25,7 @@ import EscudoEmocional from "@/components/games/EscudoEmocional";
 import ValorInvisible from "@/components/games/ValorInvisible";
 import IgualSalario from "@/components/games/IgualSalario";
 import CirculoConfianza from "@/components/games/CirculoConfianza";
+import EmergencyHelpModal from "@/components/common/EmergencyHelpModal";
 import { sound } from "@/utils/audio";
 
 type GameId =
@@ -55,8 +58,8 @@ const GAMES_LIST: GameMeta[] = [
     badge: "Límites Corporales y Autocuidado",
     level: "Infantil (6-9 años)",
     levelKey: "infantil",
-    odsTarget: "Meta 5.2: Prevención del Abuso",
-    description: "Modo Misión y desafío para reconocer zonas de protección personal y límites afectivos sanos.",
+    odsTarget: "Meta 5.2: Prevención de Abusos",
+    description: "Modo Misión con situaciones cotidianas de consentimiento, límites y zonas privadas.",
     icon: "🚦",
     accent: "border-emerald-300 text-emerald-800 bg-emerald-50",
   },
@@ -67,7 +70,7 @@ const GAMES_LIST: GameMeta[] = [
     level: "Infantil (6-9 años)",
     levelKey: "infantil",
     odsTarget: "Meta 5.4: Cuidados y Hogar",
-    description: "Distribución equitativa de 12 tareas cotidianas para que niñas y niños tengan descanso y estudio.",
+    description: "Distribución equitativa y física de 20 tareas en escenarios de lunes escolar y sábado familiar.",
     icon: "⚖️",
     accent: "border-blue-300 text-blue-800 bg-blue-50",
   },
@@ -78,7 +81,7 @@ const GAMES_LIST: GameMeta[] = [
     level: "Infantil (6-9 años)",
     levelKey: "infantil",
     odsTarget: "Meta 5.5: Participación Plena",
-    description: "Tres tamaños de tablero (3x2, 4x3, 4x4) con cápsulas de científicas y líderes michoacanas.",
+    description: "3 tamaños (3x2, 4x3, 4x4) con cápsulas sonoras de pioneras científicas mexicanas y michoacanas.",
     icon: "🧠",
     accent: "border-purple-300 text-purple-800 bg-purple-50",
   },
@@ -91,7 +94,7 @@ const GAMES_LIST: GameMeta[] = [
     level: "Intermedio (10-13 años)",
     levelKey: "intermedio",
     odsTarget: "Meta 5.1: Igualdad Social",
-    description: "Arcade Breakout multinivel con controles táctiles para romper prejuicios y desbloquear derechos.",
+    description: "Arcade Breakout con físicas controladas por delta-time, opciones de velocidad y cuenta regresiva.",
     icon: "🧱",
     accent: "border-rose-300 text-rose-800 bg-rose-50",
   },
@@ -102,7 +105,7 @@ const GAMES_LIST: GameMeta[] = [
     level: "Intermedio (10-13 años)",
     levelKey: "intermedio",
     odsTarget: "Salud Socioemocional",
-    description: "Físicas 2D para validar la empatía, el llanto y la búsqueda de ayuda, esquivando mandatos machistas.",
+    description: "Acción 2D: acoge emociones saludables (tristeza, empatía, pedir ayuda) y rechaza imposiciones machistas.",
     icon: "🛡️",
     accent: "border-cyan-300 text-cyan-800 bg-cyan-50",
   },
@@ -113,7 +116,7 @@ const GAMES_LIST: GameMeta[] = [
     level: "Intermedio (10-13 años)",
     levelKey: "intermedio",
     odsTarget: "Meta 5.4: 23.9% del PIB Nacional",
-    description: "Simulador familiar de 5 integrantes que calcula el impacto del trabajo doméstico no remunerado.",
+    description: "Simulador familiar de 5 integrantes que visibiliza el valor real del trabajo doméstico no remunerado.",
     icon: "📊",
     accent: "border-teal-300 text-teal-800 bg-teal-50",
   },
@@ -126,7 +129,7 @@ const GAMES_LIST: GameMeta[] = [
     level: "Juvenil (14+ años)",
     levelKey: "juvenil",
     odsTarget: "Meta 5.1: Paridad Laboral",
-    description: "Auditoría en 4 sectores profesionales para eliminar la brecha salarial y de ascensos directivos.",
+    description: "Auditoría en 4 sectores profesionales para eliminar brechas salariales y techos de cristal.",
     icon: "💼",
     accent: "border-violet-300 text-violet-800 bg-violet-50",
   },
@@ -137,7 +140,7 @@ const GAMES_LIST: GameMeta[] = [
     level: "Juvenil (14+ años)",
     levelKey: "juvenil",
     odsTarget: "Meta 5.2 & AVGM Morelia",
-    description: "Novela gráfica con 3 casos (violencia digital, noviazgo y acoso) y directorio oficial de Michoacán.",
+    description: "Novela gráfica con 3 casos (violencia digital, noviazgo y acoso) y directorio de auxilio de Morelia.",
     icon: "🤝",
     accent: "border-slate-400 text-slate-800 bg-slate-100",
   },
@@ -146,7 +149,8 @@ const GAMES_LIST: GameMeta[] = [
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"all" | "infantil" | "intermedio" | "juvenil">("all");
   const [selectedGameId, setSelectedGameId] = useState<GameId>("semaforo");
-  const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [isMuted, setIsMuted] = useState<boolean>(sound.getMuted());
+  const [isGlobalHelpOpen, setIsGlobalHelpOpen] = useState<boolean>(false);
 
   const filteredGames = GAMES_LIST.filter((g) => {
     if (activeTab === "all") return true;
@@ -161,15 +165,20 @@ export default function Home() {
   const handleSelectGame = (id: GameId) => {
     sound.playClick();
     setSelectedGameId(id);
+    // Smooth scroll to game area
+    const gameArea = document.getElementById("game-stage");
+    if (gameArea) {
+      gameArea.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
-      {/* Top Banner / Privacy by Design */}
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
+      {/* Top Banner / Privacy by Design & Permanent Help */}
       <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-purple-950 text-white px-4 py-2.5 text-xs text-center border-b border-indigo-900/50 shadow-sm">
         <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 font-bold text-emerald-400 bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-800">
+            <span className="inline-flex items-center gap-1.5 font-bold text-emerald-400 bg-emerald-950/70 px-2.5 py-0.5 rounded-full border border-emerald-800">
               <Lock className="w-3.5 h-3.5" /> Privacy by Design: Cero recopilación de datos de menores
             </span>
             <span className="hidden md:inline text-slate-400">•</span>
@@ -179,11 +188,22 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="text-amber-300 font-bold hidden sm:inline">ODS 5: Igualdad de Género</span>
+            <button
+              onClick={() => {
+                sound.playClick();
+                setIsGlobalHelpOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-black text-xs transition-colors shadow-xs"
+            >
+              <ShieldAlert className="w-3.5 h-3.5" />
+              <span>Directorio y Apoyo Morelia</span>
+            </button>
+
             <button
               onClick={toggleAudio}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs transition-colors border border-slate-700"
               title={isMuted ? "Activar efectos de sonido" : "Silenciar efectos de sonido"}
+              aria-label={isMuted ? "Activar efectos de sonido" : "Silenciar efectos de sonido"}
             >
               {isMuted ? (
                 <>
@@ -213,7 +233,7 @@ export default function Home() {
                 Plataforma Educativa ODS 5 • Morelia
               </h1>
               <p className="text-xs text-slate-500 font-medium">
-                8 Juegos Didácticos Ciberseguros para la Igualdad de Género
+                8 Minijuegos Didácticos y Ciberseguros para la Igualdad de Género
               </p>
             </div>
           </div>
@@ -275,7 +295,7 @@ export default function Home() {
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <Gamepad2 className="w-4 h-4 text-indigo-600" />
-              Módulos Didácticos Disponibles:
+              Módulos Didácticos Disponibles ({filteredGames.length}):
             </h2>
             <span className="text-xs text-slate-400 font-medium">
               Procesamiento Client-Side sin recolección de datos
@@ -324,7 +344,7 @@ export default function Home() {
         </section>
 
         {/* Selected Game Dynamic Stage */}
-        <section aria-label="Escenario de Juego Activo" className="transition-all duration-300">
+        <section id="game-stage" aria-label="Escenario de Juego Activo" className="transition-all duration-300">
           {selectedGameId === "semaforo" && <SemaforoContacto />}
           {selectedGameId === "balanza" && <BalanzaDelTiempo />}
           {selectedGameId === "memorama" && <MemoramaLideres />}
@@ -381,6 +401,12 @@ export default function Home() {
           </div>
         </section>
       </main>
+
+      {/* Global Emergency Help Modal */}
+      <EmergencyHelpModal
+        isOpen={isGlobalHelpOpen}
+        onClose={() => setIsGlobalHelpOpen(false)}
+      />
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-6 mt-12 text-center text-xs text-slate-500">
