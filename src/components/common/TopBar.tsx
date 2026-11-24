@@ -55,7 +55,33 @@ export default function TopBar({
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isAlbumOpen, setIsAlbumOpen] = useState(false);
   const [isA11yOpen, setIsA11yOpen] = useState(false);
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const a11yMenuRef = useRef<HTMLDivElement>(null);
+  const lastScrollYRef = useRef(0);
+
+  // Auto-ocultar barra al bajar y mostrarla al subir para dar más espacio en pantallas pequeñas
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    lastScrollYRef.current = window.scrollY;
+
+    const handleScroll = () => {
+      const currentY = window.scrollY;
+      const delta = currentY - lastScrollYRef.current;
+
+      if (currentY < 48 || isA11yOpen) {
+        setIsHeaderVisible(true);
+      } else if (delta > 8) {
+        setIsHeaderVisible(false);
+      } else if (delta < -6) {
+        setIsHeaderVisible(true);
+      }
+
+      lastScrollYRef.current = currentY;
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [isA11yOpen]);
 
   useEffect(() => {
     if (!isA11yOpen) return;
@@ -94,8 +120,13 @@ export default function TopBar({
         </div>
       </div>
 
-      {/* Barra persistente principal */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b-2 border-slate-200 shadow-sm">
+      {/* Barra persistente inteligente: se oculta al bajar y reaparece al subir */}
+      <header
+        onFocusCapture={() => setIsHeaderVisible(true)}
+        className={`sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b-2 border-slate-200 shadow-sm transition-transform duration-200 ease-out ${
+          isHeaderVisible ? "translate-y-0" : "-translate-y-full pointer-events-none"
+        }`}
+      >
         <div className="max-w-7xl mx-auto px-2.5 sm:px-5 py-2 flex flex-wrap items-center justify-between gap-2">
           {/* Izquierda: Logo siempre a la izquierda + Inicio + Selector de edad rápido */}
           <div className="flex items-center gap-2 sm:gap-3">
