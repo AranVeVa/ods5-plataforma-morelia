@@ -127,7 +127,7 @@ export default function TopBar({
           isHeaderVisible ? "translate-y-0" : "-translate-y-full pointer-events-none"
         }`}
       >
-        <div className="max-w-7xl mx-auto px-2 sm:px-5 py-1.5 sm:py-2 flex items-center justify-between gap-1.5 sm:gap-3">
+        <div className="max-w-7xl mx-auto px-2 sm:px-5 py-1.5 sm:py-2 flex flex-wrap items-center justify-between gap-1.5 sm:gap-3">
           {/* Izquierda: Logo siempre a la izquierda + Inicio + Selector de edad en pantallas medianas/grandes */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 shrink-0">
             {onGoHome ? (
@@ -139,8 +139,8 @@ export default function TopBar({
                 className="rounded-xl focus-visible:ring-2 focus-visible:ring-indigo-500 transition-opacity hover:opacity-90 shrink-0"
                 aria-label="ODS 5 Morelia — Volver al inicio"
               >
-                <BrandLogo size={34} showText={false} className="sm:hidden" />
-                <BrandLogo size={38} showText={true} compact={true} className="hidden sm:inline-flex" />
+                <BrandLogo size={34} showText={false} className="md:hidden" />
+                <BrandLogo size={38} showText={true} compact={true} className="hidden md:inline-flex" />
               </button>
             ) : showHomeButton ? (
               <Link
@@ -149,8 +149,8 @@ export default function TopBar({
                 className="rounded-xl focus-visible:ring-2 focus-visible:ring-indigo-500 transition-opacity hover:opacity-90 shrink-0"
                 aria-label="ODS 5 Morelia — Volver al inicio"
               >
-                <BrandLogo size={34} showText={false} className="sm:hidden" />
-                <BrandLogo size={38} showText={true} compact={true} className="hidden sm:inline-flex" />
+                <BrandLogo size={34} showText={false} className="md:hidden" />
+                <BrandLogo size={38} showText={true} compact={true} className="hidden md:inline-flex" />
               </Link>
             ) : (
               <>
@@ -222,7 +222,7 @@ export default function TopBar({
               <span>
                 {groupSummary.totalStars}/{groupSummary.maxStars}
               </span>
-              <span className="hidden sm:inline">⭐ Logros</span>
+              <span className="hidden md:inline">⭐ Logros</span>
             </button>
 
             <Link
