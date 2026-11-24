@@ -1,26 +1,16 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import {
-  Award,
-  RefreshCw,
-  Volume2,
-  CheckCircle2,
-  Clock,
-  Star,
-  Sparkles,
-  Layers,
-  Trophy,
-  ExternalLink,
-  BookOpen
-} from "lucide-react";
-import confetti from "canvas-confetti";
-import GameHeader from "@/components/common/GameHeader";
-import InstructionsModal from "@/components/common/InstructionsModal";
-import VictoryModal from "@/components/common/VictoryModal";
-import EmergencyHelpModal from "@/components/common/EmergencyHelpModal";
-import { FEMALE_LEADERS, FemaleLeader } from "@/data/educational-content";
-import { sound } from "@/utils/audio";
+import { Clock, Flame, Volume2, RotateCcw, Sparkles, Timer } from "lucide-react";
+import GameShell, { DifficultyLevel } from "@/components/common/GameShell";
+import Button3D from "@/components/common/Button3D";
+import { FEMALE_LEADERS, FemaleLeader, MEMORAMA_TUTORIAL } from "@/content/game3-memorama";
+import { useSound } from "@/hooks/useSound";
+
+interface GameProps {
+  onHome?: () => void;
+  onNextGame?: () => void;
+}
 
 interface MemoryCard {
   uid: string;
@@ -30,381 +20,374 @@ interface MemoryCard {
   isMatched: boolean;
 }
 
-type BoardDifficulty = "facil" | "medio" | "experto";
-
-export default function MemoramaLideres() {
-  const [difficulty, setDifficulty] = useState<BoardDifficulty>("medio");
-  const [cards, setCards] = useState<MemoryCard[]>([]);
-  const [flippedCards, setFlippedCards] = useState<number[]>([]);
-  const [activeLeaderModal, setActiveLeaderModal] = useState<FemaleLeader | null>(null);
-  const [matchedPairsCount, setMatchedPairsCount] = useState<number>(0);
-  const [moves, setMoves] = useState<number>(0);
-  const [seconds, setSeconds] = useState<number>(0);
-  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
-  const [isInstructionsOpen, setIsInstructionsOpen] = useState<boolean>(false);
-  const [isVictoryOpen, setIsVictoryOpen] = useState<boolean>(false);
-  const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
-
-  const getTargetPairs = useCallback((diff: BoardDifficulty) => {
-    switch (diff) {
-      case "facil":
-        return 3; // 6 cards (3x2)
-      case "medio":
-        return 6; // 12 cards (4x3)
-      case "experto":
-        return 8; // 16 cards (4x4)
-    }
-  }, []);
-
-  const initializeDeck = useCallback(
-    (diff: BoardDifficulty) => {
-      const pairCount = getTargetPairs(diff);
-      const selectedLeaders = FEMALE_LEADERS.slice(0, pairCount);
-
-      const deck: MemoryCard[] = [];
-      selectedLeaders.forEach((leader) => {
-        deck.push({
-          uid: `${leader.id}-a`,
-          leaderId: leader.id,
-          leader,
-          isFlipped: false,
-          isMatched: false,
-        });
-        deck.push({
-          uid: `${leader.id}-b`,
-          leaderId: leader.id,
-          leader,
-          isFlipped: false,
-          isMatched: false,
-        });
-      });
-
-      // Fisher-Yates shuffle algorithm
-      for (let i = deck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [deck[i], deck[j]] = [deck[j], deck[i]];
-      }
-
-      setCards(deck);
-      setFlippedCards([]);
-      setMatchedPairsCount(0);
-      setMoves(0);
-      setSeconds(0);
-      setIsTimerRunning(false);
-      setActiveLeaderModal(null);
-      setIsVictoryOpen(false);
-    },
-    [getTargetPairs]
-  );
-
-  useEffect(() => {
-    initializeDeck(difficulty);
-  }, [difficulty, initializeDeck]);
-
-  // Timer runner
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (isTimerRunning) {
-      interval = setInterval(() => {
-        setSeconds((s) => s + 1);
-      }, 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isTimerRunning]);
-
-  const handleCardClick = (index: number) => {
-    if (cards[index].isFlipped || cards[index].isMatched || flippedCards.length === 2) {
-      return;
-    }
-
-    if (!isTimerRunning) {
-      setIsTimerRunning(true);
-    }
-
-    sound.playFlip();
-
-    const newCards = [...cards];
-    newCards[index].isFlipped = true;
-    setCards(newCards);
-
-    const newFlipped = [...flippedCards, index];
-    setFlippedCards(newFlipped);
-
-    if (newFlipped.length === 2) {
-      setMoves((m) => m + 1);
-      const [firstIdx, secondIdx] = newFlipped;
-      const firstCard = newCards[firstIdx];
-      const secondCard = newCards[secondIdx];
-
-      if (firstCard.leaderId === secondCard.leaderId) {
-        // Matched pair!
-        setTimeout(() => {
-          sound.playCorrect();
-          firstCard.isMatched = true;
-          secondCard.isMatched = true;
-          setCards([...newCards]);
-          setFlippedCards([]);
-          setMatchedPairsCount((c) => c + 1);
-          setActiveLeaderModal(firstCard.leader);
-
-          const targetPairs = getTargetPairs(difficulty);
-          if (matchedPairsCount + 1 === targetPairs) {
-            setIsTimerRunning(false);
-            sound.playCelebration();
-            setIsVictoryOpen(true);
-          }
-        }, 300);
-      } else {
-        // Not matched
-        setTimeout(() => {
-          sound.playAlert();
-          firstCard.isFlipped = false;
-          secondCard.isFlipped = false;
-          setCards([...newCards]);
-          setFlippedCards([]);
-        }, 900);
-      }
-    }
+/** Retrato SVG estilizado único por pionera mexicana/michoacana (sin fotos externas) */
+function LeaderPortrait({ leaderId }: { leaderId: string }) {
+  const styles: Record<string, { bg: string; skin: string; hair: string; outfit: string; prop: string }> = {
+    katya: { bg: "#dbeafe", skin: "#e6b89c", hair: "#1e1b4b", outfit: "#f8fafc", prop: "🚀" },
+    amalia: { bg: "#fef3c7", skin: "#e7bc91", hair: "#334155", outfit: "#be123c", prop: "🕊️" },
+    sor_juana: { bg: "#d1fae5", skin: "#f3d5b5", hair: "#1e293b", outfit: "#0f172a", prop: "📜" },
+    julieta: { bg: "#f3e8ff", skin: "#ecc8af", hair: "#78350f", outfit: "#7c3aed", prop: "🔭" },
+    elvia: { bg: "#ffe4e6", skin: "#e5b293", hair: "#1e293b", outfit: "#e11d48", prop: "⚖️" },
+    matilde: { bg: "#ccfbf1", skin: "#edd1b0", hair: "#292524", outfit: "#ffffff", prop: "🩺" },
+    mariana: { bg: "#e0e7ff", skin: "#d9a07e", hair: "#0f172a", outfit: "#2563eb", prop: "🤖" },
+    frida: { bg: "#fae8ff", skin: "#e2b08d", hair: "#09090b", outfit: "#db2777", prop: "🎨" },
   };
-
-  const playLeaderAudio = (leader: FemaleLeader) => {
-    sound.playClick();
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(
-        `${leader.name}. ${leader.role}. Originaria de ${leader.origin}. ${leader.achievement}. Dato curioso: ${leader.funFact}. Frase célebre: ${leader.quote}`
-      );
-      utter.lang = "es-MX";
-      window.speechSynthesis.speak(utter);
-    }
-  };
-
-  const formatTime = (secs: number) => {
-    const mins = Math.floor(secs / 60);
-    const remainder = secs % 60;
-    return `${mins}:${remainder < 10 ? "0" : ""}${remainder}`;
-  };
-
-  const targetPairs = getTargetPairs(difficulty);
-  const score = matchedPairsCount * 100 - Math.min(moves * 5, 200);
+  const s = styles[leaderId] ?? styles.katya;
 
   return (
-    <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border-2 border-indigo-100 max-w-4xl mx-auto space-y-6">
-      {/* Shared Header */}
-      <GameHeader
-        title="🧠 Memorama de Mujeres Pioneras"
-        badge="Visibilización de científicas y lideresas mexicanas (Meta ODS 5.5)"
-        levelBadge="Nivel Infantil (6 a 9 años)"
-        levelColor="purple"
-        odsTarget="ODS 5.5"
-        score={Math.max(0, score)}
-        stars={matchedPairsCount === targetPairs ? 3 : matchedPairsCount > 2 ? 2 : 1}
-        maxStars={3}
-        onOpenHelp={() => setIsHelpOpen(true)}
-        onOpenInstructions={() => setIsInstructionsOpen(true)}
-        onRestart={() => initializeDeck(difficulty)}
-      />
+    <svg viewBox="0 0 90 90" className="w-14 h-14 sm:w-20 sm:h-20 mx-auto shrink-0" aria-hidden="true">
+      <circle cx="45" cy="45" r="42" fill={s.bg} />
+      {/* Cabello trasero */}
+      <circle cx="45" cy="36" r="21" fill={s.hair} />
+      {/* Hombros / atuendo */}
+      <path d="M 18 80 Q 45 58 72 80 Z" fill={s.outfit} stroke="#cbd5e1" strokeWidth="1.5" />
+      {/* Rostro */}
+      <circle cx="45" cy="39" r="15" fill={s.skin} />
+      {/* Detalle cultural para Frida o Katya */}
+      {leaderId === "frida" && (
+        <>
+          <circle cx="35" cy="22" r="4.5" fill="#f43f5e" />
+          <circle cx="45" cy="20" r="5" fill="#fbbf24" />
+          <circle cx="55" cy="22" r="4.5" fill="#ec4899" />
+          <path d="M 38 35 Q 45 33 52 35" stroke={s.hair} strokeWidth="2.5" fill="none" />
+        </>
+      )}
+      {leaderId === "katya" && (
+        <circle cx="45" cy="39" r="20" fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeDasharray="5 3" />
+      )}
+      {/* Ojos y sonrisa */}
+      <circle cx="40" cy="38" r="2" fill="#1e293b" />
+      <circle cx="50" cy="38" r="2" fill="#1e293b" />
+      <path d="M 40 44 Q 45 48 50 44" stroke="#9a3412" strokeWidth="2" fill="none" strokeLinecap="round" />
+      {/* Insignia temática */}
+      <circle cx="70" cy="70" r="13" fill="#ffffff" stroke="#e2e8f0" strokeWidth="2" />
+      <text x="70" y="75" textAnchor="middle" fontSize="13">{s.prop}</text>
+    </svg>
+  );
+}
 
-      {/* Difficulty Switcher & Game Stats Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-100 p-2 rounded-2xl">
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => {
-              sound.playPowerup();
-              setDifficulty("facil");
-            }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
-              difficulty === "facil"
-                ? "bg-white text-purple-800 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            Fácil (3x2 • 6 cartas)
-          </button>
-          <button
-            onClick={() => {
-              sound.playPowerup();
-              setDifficulty("medio");
-            }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
-              difficulty === "medio"
-                ? "bg-white text-purple-800 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            Medio (4x3 • 12 cartas)
-          </button>
-          <button
-            onClick={() => {
-              sound.playPowerup();
-              setDifficulty("experto");
-            }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
-              difficulty === "experto"
-                ? "bg-white text-purple-800 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            Experto (4x4 • 16 cartas)
-          </button>
+function buildShuffledDeck(targetPairs: number): MemoryCard[] {
+  const selected = FEMALE_LEADERS.slice(0, targetPairs);
+  const deck: MemoryCard[] = [];
+  selected.forEach((leader) => {
+    deck.push({ uid: `${leader.id}-a`, leaderId: leader.id, leader, isFlipped: false, isMatched: false });
+    deck.push({ uid: `${leader.id}-b`, leaderId: leader.id, leader, isFlipped: false, isMatched: false });
+  });
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
+}
+
+function MemoramaGameplay({
+  difficulty,
+  onComplete,
+}: {
+  difficulty: DifficultyLevel;
+  onComplete: (stars: 0 | 1 | 2 | 3, score: number, maxScore: number, msg: string) => void;
+}) {
+  const { playFlip, playCorrect, playAlert, playClick } = useSound();
+
+  const targetPairs = difficulty === "facil" ? 3 : difficulty === "normal" ? 6 : 8;
+  const timedLimit = difficulty === "facil" ? 90 : difficulty === "normal" ? 120 : 140;
+
+  const [timedMode, setTimedMode] = useState(difficulty === "reto");
+  const [cards, setCards] = useState<MemoryCard[]>(() => buildShuffledDeck(targetPairs));
+  const [flipped, setFlipped] = useState<number[]>([]);
+  const [matchedCount, setMatchedCount] = useState(0);
+  const [moves, setMoves] = useState(0);
+  const [combo, setCombo] = useState(0);
+  const [maxCombo, setMaxCombo] = useState(0);
+  const [score, setScore] = useState(0);
+  const [seconds, setSeconds] = useState(0);
+  const [running, setRunning] = useState(false);
+  const [capsule, setCapsule] = useState<FemaleLeader | null>(null);
+
+  const initDeck = useCallback(() => {
+    setCards(buildShuffledDeck(targetPairs));
+    setFlipped([]);
+    setMatchedCount(0);
+    setMoves(0);
+    setCombo(0);
+    setMaxCombo(0);
+    setScore(0);
+    setSeconds(0);
+    setRunning(false);
+    setCapsule(null);
+  }, [targetPairs]);
+
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => {
+      setSeconds((s) => {
+        const next = s + 1;
+        if (timedMode && next >= timedLimit) {
+          setRunning(false);
+        }
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [running, timedMode, timedLimit]);
+
+  const timeExpired = timedMode && seconds >= timedLimit && matchedCount < targetPairs;
+
+  useEffect(() => {
+    if (timeExpired) {
+      onComplete(
+        matchedCount >= Math.ceil(targetPairs / 2) ? 1 : 0,
+        score,
+        targetPairs * 150,
+        `¡Se acabó el tiempo! Descubriste ${matchedCount} de ${targetPairs} pioneras mexicanas. ¡Inténtalo de nuevo!`
+      );
+    }
+  }, [timeExpired, matchedCount, targetPairs, score, onComplete]);
+
+  const handleCardClick = (index: number) => {
+    if (timeExpired || cards[index].isFlipped || cards[index].isMatched || flipped.length === 2) return;
+    if (!running) setRunning(true);
+
+    playFlip();
+    const updated = [...cards];
+    updated[index] = { ...updated[index], isFlipped: true };
+    setCards(updated);
+
+    const nextFlipped = [...flipped, index];
+    setFlipped(nextFlipped);
+
+    if (nextFlipped.length === 2) {
+      setMoves((m) => m + 1);
+      const [i1, i2] = nextFlipped;
+      const c1 = updated[i1];
+      const c2 = updated[i2];
+
+      if (c1.leaderId === c2.leaderId) {
+        setTimeout(() => {
+          playCorrect();
+          const newCombo = combo + 1;
+          const gained = 100 + (newCombo - 1) * 50;
+          const nextScore = score + gained;
+          const nextMatched = matchedCount + 1;
+
+          setCards((prev) =>
+            prev.map((c, idx) => (idx === i1 || idx === i2 ? { ...c, isMatched: true } : c))
+          );
+          setFlipped([]);
+          setCombo(newCombo);
+          setMaxCombo((mc) => Math.max(mc, newCombo));
+          setScore(nextScore);
+          setMatchedCount(nextMatched);
+          setCapsule(c1.leader);
+
+          if (nextMatched === targetPairs) {
+            setRunning(false);
+            const maxPossible = targetPairs * 150;
+            const stars: 0 | 1 | 2 | 3 =
+              moves <= targetPairs + 3 ? 3 : moves <= targetPairs * 2 ? 2 : 1;
+            setTimeout(() => {
+              onComplete(
+                stars,
+                nextScore,
+                maxPossible,
+                `¡Completaste el tablero de ${targetPairs} pioneras en ${moves + 1} intentos con combo máximo x${Math.max(maxCombo, newCombo)}!`
+              );
+            }, 900);
+          }
+        }, 280);
+      } else {
+        setTimeout(() => {
+          playAlert();
+          setCombo(0);
+          setCards((prev) =>
+            prev.map((c, idx) => (idx === i1 || idx === i2 ? { ...c, isFlipped: false } : c))
+          );
+          setFlipped([]);
+        }, 800);
+      }
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const speakLeader = (leader: FemaleLeader) => {
+    playClick();
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(
+      `${leader.name}. ${leader.role}. ${leader.achievement}. Dato curioso: ${leader.funFact}`
+    );
+    u.lang = "es-MX";
+    window.speechSynthesis.speak(u);
+  };
+
+  const gridColsClass =
+    difficulty === "facil" ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-3 sm:grid-cols-4";
+
+  const remaining = Math.max(0, timedLimit - seconds);
+  const displayTime = timedMode ? remaining : seconds;
+  const mins = Math.floor(displayTime / 60);
+  const secs = displayTime % 60;
+
+  return (
+    <div className="bg-white rounded-4xl border-2 border-amber-200 shadow-xl p-5 sm:p-8 space-y-6">
+      {/* HUD */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="px-3 py-1.5 rounded-xl bg-purple-100 text-purple-900 text-xs font-black">
+            Parejas: {matchedCount}/{targetPairs}
+          </span>
+          <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-800 text-xs font-black">
+            Movimientos: {moves}
+          </span>
+          <span className="px-3 py-1.5 rounded-xl bg-amber-100 text-amber-900 text-xs font-black inline-flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5" />
+            {mins}:{secs < 10 ? "0" : ""}{secs}
+          </span>
+          {combo > 1 && (
+            <span className="px-3 py-1.5 rounded-xl bg-rose-500 text-white text-xs font-black inline-flex items-center gap-1 animate-pop">
+              <Flame className="w-3.5 h-3.5" /> Combo x{combo}
+            </span>
+          )}
         </div>
 
-        {/* Real-time Game stats */}
-        <div className="flex items-center gap-4 text-xs font-black text-slate-700 px-2">
-          <div className="flex items-center gap-1.5 text-indigo-700">
-            <Clock className="w-4 h-4" />
-            <span>{formatTime(seconds)}</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-purple-700">
-            <Layers className="w-4 h-4" />
-            <span>{moves} intentos</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-emerald-700">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>{matchedPairsCount}/{targetPairs} pares</span>
-          </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              playClick();
+              setTimedMode((v) => !v);
+            }}
+            className={`min-h-[44px] px-3 py-1.5 rounded-xl text-xs font-bold border inline-flex items-center gap-1.5 ${
+              timedMode
+                ? "bg-rose-600 text-white border-rose-700"
+                : "bg-slate-50 text-slate-700 border-slate-200"
+            }`}
+          >
+            <Timer className="w-4 h-4" />
+            {timedMode ? "Contrarreloj ON" : "Contrarreloj OFF"}
+          </button>
+
+          <button
+            onClick={() => {
+              playClick();
+              initDeck();
+            }}
+            className="min-h-[44px] px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold inline-flex items-center gap-1.5"
+          >
+            <RotateCcw className="w-4 h-4" /> Barajar
+          </button>
         </div>
       </div>
 
-      {/* Cards Board Grid with 3D Flip style */}
-      <div
-        className={`grid gap-3 sm:gap-4 ${
-          difficulty === "facil"
-            ? "grid-cols-2 sm:grid-cols-3"
-            : difficulty === "medio"
-            ? "grid-cols-3 sm:grid-cols-4"
-            : "grid-cols-4"
-        }`}
-      >
-        {cards.map((card, idx) => {
-          const isRevealed = card.isFlipped || card.isMatched;
+      {/* Cápsula biográfica al descubrir pareja */}
+      {capsule && (
+        <div className="rounded-3xl border-2 border-purple-300 bg-gradient-to-r from-purple-50 to-pink-50 p-4 flex flex-col sm:flex-row items-center gap-4 animate-scaleUp">
+          <LeaderPortrait leaderId={capsule.id} />
+          <div className="flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-black uppercase px-2.5 py-0.5 rounded-full bg-purple-600 text-white">
+                {capsule.area}
+              </span>
+              <span className="text-xs font-bold text-slate-500">{capsule.origin}</span>
+            </div>
+            <h3 className="text-base sm:text-lg font-display font-black text-slate-900">
+              {capsule.name} — {capsule.role}
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-700">{capsule.achievement}</p>
+            <p className="text-xs font-bold text-purple-900">
+              <Sparkles className="w-3.5 h-3.5 inline mr-1" />
+              Dato curioso: {capsule.funFact}
+            </p>
+          </div>
+          <Button3D
+            variant="secondary"
+            size="sm"
+            onClick={() => speakLeader(capsule)}
+            icon={<Volume2 className="w-4 h-4" />}
+          >
+            Escuchar
+          </Button3D>
+        </div>
+      )}
+
+      {/* Tablero 3D CSS */}
+      <div className={`grid ${gridColsClass} gap-3 sm:gap-4`}>
+        {cards.map((card, i) => {
+          const revealed = card.isFlipped || card.isMatched;
           return (
             <button
               key={card.uid}
-              onClick={() => handleCardClick(idx)}
-              disabled={isRevealed}
-              className={`h-32 sm:h-36 rounded-3xl p-2.5 flex flex-col items-center justify-between text-center transition-all duration-300 transform ${
-                card.isMatched
-                  ? "bg-emerald-50 border-2 border-emerald-400 shadow-xs scale-98 opacity-90"
-                  : isRevealed
-                  ? "bg-white border-2 border-purple-500 shadow-md scale-102"
-                  : "bg-gradient-to-br from-indigo-600 via-purple-600 to-indigo-800 hover:from-indigo-700 hover:to-purple-700 text-white shadow-sm hover:scale-102 cursor-pointer border-2 border-indigo-400"
-              }`}
-              aria-label={`Carta ${idx + 1}`}
+              onClick={() => handleCardClick(i)}
+              disabled={card.isMatched}
+              aria-label={
+                revealed
+                  ? `Carta descubierta: ${card.leader.name}`
+                  : `Carta oculta número ${i + 1}`
+              }
+              className="perspective-1000 h-40 sm:h-44 w-full text-left focus-visible:ring-4 rounded-2xl"
             >
-              {isRevealed ? (
-                <div className="flex flex-col items-center justify-between h-full py-1 w-full animate-fadeIn">
-                  <span className="text-3xl p-1 bg-slate-50 rounded-2xl border border-slate-100">
-                    {card.leader.avatarIcon}
+              <div
+                className={`relative w-full h-full transition-transform duration-500 transform-style-3d ${
+                  revealed ? "rotate-y-180" : ""
+                }`}
+              >
+                {/* Reverso */}
+                <div className="absolute inset-0 backface-hidden rounded-2xl border-2 border-purple-300 bg-gradient-to-br from-purple-600 via-indigo-600 to-fuchsia-600 text-white flex flex-col items-center justify-center shadow-md hover:shadow-lg">
+                  <span className="text-3xl font-black">5</span>
+                  <span className="text-[11px] font-bold tracking-wider uppercase opacity-90 mt-1">
+                    Pioneras
                   </span>
+                </div>
+
+                {/* Frente */}
+                <div
+                  className={`absolute inset-0 backface-hidden rotate-y-180 rounded-2xl border-2 p-2.5 flex flex-col items-center justify-between text-center shadow-md ${
+                    card.isMatched
+                      ? "bg-emerald-50 border-emerald-400"
+                      : "bg-white border-purple-300"
+                  }`}
+                >
+                  <LeaderPortrait leaderId={card.leaderId} />
                   <div>
-                    <h4 className="text-[11px] sm:text-xs font-black text-slate-900 leading-tight line-clamp-1">
+                    <p className="text-xs font-black text-slate-900 leading-tight line-clamp-2">
                       {card.leader.name}
-                    </h4>
-                    <span className="text-[9px] text-purple-700 font-bold block mt-0.5">
+                    </p>
+                    <p className="text-[10px] font-bold text-purple-700 mt-0.5">
                       {card.leader.area}
-                    </span>
+                    </p>
                   </div>
-                  {card.isMatched && (
-                    <span className="inline-flex items-center gap-1 text-[9px] text-emerald-800 font-black bg-emerald-100 px-2 py-0.5 rounded-full">
-                      ✓ Par
-                    </span>
-                  )}
                 </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full gap-1.5">
-                  <Sparkles className="w-6 h-6 text-yellow-300 animate-pulse" />
-                  <span className="text-[10px] font-black uppercase tracking-wider text-white/90">
-                    ODS 5
-                  </span>
-                </div>
-              )}
+              </div>
             </button>
           );
         })}
       </div>
-
-      {/* Discovered Leader Biographic Capsule */}
-      {activeLeaderModal && (
-        <div className="p-5 rounded-3xl bg-gradient-to-r from-purple-50 via-pink-50 to-indigo-50 border-2 border-purple-200 shadow-md animate-fadeIn">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-purple-100">
-            <div className="flex items-center gap-3">
-              <span className="text-4xl p-2.5 bg-white rounded-2xl border border-purple-200 shadow-xs">
-                {activeLeaderModal.avatarIcon}
-              </span>
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-wider bg-purple-200 text-purple-900 px-2.5 py-0.5 rounded-full">
-                  {activeLeaderModal.area} • {activeLeaderModal.origin}
-                </span>
-                <h3 className="text-lg font-black text-slate-900 mt-1">
-                  {activeLeaderModal.name}
-                </h3>
-                <p className="text-xs font-bold text-purple-700">
-                  {activeLeaderModal.role}
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => playLeaderAudio(activeLeaderModal)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black shadow transition-colors shrink-0"
-            >
-              <Volume2 className="w-4 h-4" /> Escuchar biografía
-            </button>
-          </div>
-
-          <p className="text-xs sm:text-sm text-slate-800 mt-3 leading-relaxed font-medium">
-            {activeLeaderModal.achievement}
-          </p>
-
-          <div className="mt-3 p-3 bg-white/80 rounded-2xl border border-purple-100 text-xs text-purple-950">
-            <strong>Dato inspirador:</strong> {activeLeaderModal.funFact}
-          </div>
-
-          <blockquote className="mt-3 p-3 bg-slate-50/90 rounded-2xl border-l-4 border-purple-500 italic text-xs text-slate-700">
-            &ldquo;{activeLeaderModal.quote}&rdquo;
-          </blockquote>
-        </div>
-      )}
-
-      {/* Modals */}
-      <InstructionsModal
-        isOpen={isInstructionsOpen}
-        onClose={() => setIsInstructionsOpen(false)}
-        title="Instrucciones: Memorama de Pioneras y Científicas"
-        objective="Encontrar los pares de tarjetas para descubrir las aportaciones de pioneras mexicanas e históricas en ciencia, arte, política y educación."
-        rules={[
-          "Toca una tarjeta para voltearla y busca su pareja idéntica.",
-          "Al encontrar cada par, desbloquearás su cápsula biográfica oficial y podrás escuchar su narración en voz alta.",
-          "Elige entre dificultad Fácil (6 cartas), Media (12 cartas) y Experta (16 cartas)."
-        ]}
-        tips={[
-          "Presta atención al icono y al área de cada líder para memorizar su ubicación.",
-          "Conoce a pioneras michoacanas como Amalia Solórzano de Cárdenas y las jóvenes de Morelia STEM."
-        ]}
-      />
-
-      <VictoryModal
-        isOpen={isVictoryOpen}
-        title="¡Gran Descubridora de Pioneras!"
-        score={Math.max(0, score)}
-        stars={3}
-        maxStars={3}
-        takeaway="Has demostrado excelente memoria y conocido a grandes mujeres que transformaron la ciencia, el espacio y la historia de México."
-        summaryPoints={[
-          `Completaste el reto en ${moves} movimientos y ${formatTime(seconds)}.`,
-          "Conociste aportes reales en astronomía, medicina, sufragio y robótica.",
-          "Derribaste el mito de que las ciencias o el liderazgo son exclusivos de los varones."
-        ]}
-        onRestart={() => initializeDeck(difficulty)}
-      />
-
-      <EmergencyHelpModal
-        isOpen={isHelpOpen}
-        onClose={() => setIsHelpOpen(false)}
-      />
     </div>
+  );
+}
+
+export default function MemoramaLideres({ onHome, onNextGame }: GameProps) {
+  return (
+    <GameShell
+      gameId="memorama"
+      tutorialSteps={MEMORAMA_TUTORIAL}
+      difficulties={[
+        { id: "facil", label: "Tablero 3x2 (6 cartas)", subtitle: "3 pioneras mexicanas · ideal para empezar", emoji: "🌱" },
+        { id: "normal", label: "Tablero 4x3 (12 cartas)", subtitle: "6 mujeres STEM, arte e historia", emoji: "🧠" },
+        { id: "reto", label: "Tablero 4x4 Contrarreloj (16 cartas)", subtitle: "Todas las pioneras con límite de tiempo", emoji: "⏱️" },
+      ]}
+      onHome={onHome}
+      onNextGame={onNextGame}
+    >
+      {({ difficulty, finishGame }) => (
+        <MemoramaGameplay difficulty={difficulty} onComplete={finishGame} />
+      )}
+    </GameShell>
   );
 }

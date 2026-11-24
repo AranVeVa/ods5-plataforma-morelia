@@ -1,527 +1,555 @@
 "use client";
 
 import React, { useRef, useEffect, useState, useCallback } from "react";
+import { Shield, Play, Pause, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
+import GameShell, { DifficultyLevel } from "@/components/common/GameShell";
+import Button3D from "@/components/common/Button3D";
 import {
-  Shield,
-  Play,
-  RotateCcw,
-  Heart,
-  AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
-  Sparkles,
-  Zap,
-  CheckCircle2,
-  HelpCircle,
-  Pause
-} from "lucide-react";
-import confetti from "canvas-confetti";
-import GameHeader from "@/components/common/GameHeader";
-import InstructionsModal from "@/components/common/InstructionsModal";
-import VictoryModal from "@/components/common/VictoryModal";
-import PauseModal from "@/components/common/PauseModal";
-import EmergencyHelpModal from "@/components/common/EmergencyHelpModal";
-import { sound } from "@/utils/audio";
+  HEALTHY_EMOTIONS_POOL,
+  TOXIC_MANDATES_POOL,
+  ESCUDO_WORLDS,
+  ESCUDO_TUTORIAL,
+  EmotionEntityData,
+} from "@/content/game5-escudo";
+import { useSound } from "@/hooks/useSound";
+
+interface GameProps {
+  onHome?: () => void;
+  onNextGame?: () => void;
+}
 
 interface FallingEntity {
   id: number;
   x: number;
   y: number;
   speed: number;
-  type: "toxic" | "emotion";
-  text: string;
+  kind: "emotion" | "toxic" | "powerup";
+  label: string;
   icon: string;
   explanation: string;
 }
 
-const HEALTHY_EMOTIONS = [
-  { text: "Llorar ante la tristeza", icon: "💧", explanation: "Llorar es natural; ayuda al cuerpo a liberar dolor y restablecer el equilibrio emocional." },
-  { text: "Pedir un abrazo de apoyo", icon: "🤗", explanation: "Buscar afecto y cercanía fortalece la salud mental y la empatía en los vínculos." },
-  { text: "Reconocer que siento miedo", icon: "🛡️", explanation: "El miedo es una señal que nos protege del peligro real; expresarlo nos permite recibir ayuda." },
-  { text: "Tratar con ternura", icon: "🌸", explanation: "La ternura y la delicadeza son muestras de madurez y fortaleza humana, no de debilidad." },
-  { text: "Pedir ayuda cuando no puedo", icon: "🤝", explanation: "Pedir ayuda es un acto de gran valentía e inteligencia que resuelve dificultades." },
-  { text: "Manifestar mis dudas", icon: "💬", explanation: "Preguntar y dudar es la base del aprendizaje y del pensamiento crítico sin presiones." },
-];
-
-const TOXIC_MANDATES = [
-  { text: "Los hombres no lloran", icon: "🛑", explanation: "Mandato machista que enferma y reprime la salud emocional." },
-  { text: "No muestres debilidad", icon: "🚫", explanation: "Pretensión dañina de invulnerabilidad que aísla a las personas." },
-  { text: "Pelea a golpes", icon: "👊", explanation: "La violencia física degrada la convivencia y nunca soluciona desacuerdos." },
-  { text: "Imponte a la fuerza", icon: "⚠️", explanation: "El autoritarismo destruye la confianza y vulnera derechos." },
-  { text: "Sentir es de débiles", icon: "⛔", explanation: "Todas las personas sienten; reprimir las emociones genera conductas agresivas." },
-];
-
-export default function EscudoEmocional() {
+function EscudoGameplay({
+  difficulty,
+  onComplete,
+}: {
+  difficulty: DifficultyLevel;
+  onComplete: (
+    stars: 0 | 1 | 2 | 3,
+    score: number,
+    maxScore: number,
+    msg: string,
+    extraContent?: React.ReactNode
+  ) => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [isPaused, setIsPaused] = useState<boolean>(false);
-  const [score, setScore] = useState<number>(0);
-  const [lives, setLives] = useState<number>(3);
-  const [shieldEnergy, setShieldEnergy] = useState<number>(100);
-  const [isShieldActive, setIsShieldActive] = useState<boolean>(false);
-  const [recentMessage, setRecentMessage] = useState<string>("¡Mueve tu personaje para acoger emociones saludables y activar tu escudo ante presiones!");
-  const [collectedEmotions, setCollectedEmotions] = useState<{ text: string; icon: string; explanation: string }[]>([]);
-  const [isInstructionsOpen, setIsInstructionsOpen] = useState<boolean>(false);
-  const [isVictoryOpen, setIsVictoryOpen] = useState<boolean>(false);
-  const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
+  const { playShield, playCorrect, playAlert, playPowerup, playClick } = useSound();
+
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [wellness, setWellness] = useState(85);
+  const [shieldEnergy, setShieldEnergy] = useState(100);
+  const [score, setScore] = useState(0);
+  const [worldIdx, setWorldIdx] = useState(0);
+  const [recentMsg, setRecentMsg] = useState("¡Atrapa emociones sanas! Tu escudo repele mandatos dañinos automáticamente.");
+
+  const targetScore = difficulty === "facil" ? 400 : difficulty === "normal" ? 650 : 900;
 
   const stateRef = useRef({
     playerX: 200,
-    playerTargetX: 200,
-    playerW: 75,
-    playerH: 30,
+    playerW: 76,
     entities: [] as FallingEntity[],
     nextId: 1,
     lastSpawn: 0,
-    animationId: 0,
     lastTime: 0,
-    shieldActive: false,
+    shieldFlashUntil: 0,
     shieldEnergy: 100,
+    wellness: 85,
+    score: 0,
+    caught: {} as Record<string, { count: number; explanation: string; icon: string }>,
+    deflected: {} as Record<string, { count: number; explanation: string; icon: string }>,
+    finished: false,
+    currentWorldIdx: 0,
+    lastUiShieldEnergy: 100,
   });
 
-  const activateShield = () => {
-    if (stateRef.current.shieldEnergy >= 25 && !stateRef.current.shieldActive) {
-      sound.playShield();
-      stateRef.current.shieldActive = true;
-      stateRef.current.shieldEnergy -= 25;
-      setIsShieldActive(true);
-      setShieldEnergy(stateRef.current.shieldEnergy);
-
-      setTimeout(() => {
-        stateRef.current.shieldActive = false;
-        setIsShieldActive(false);
-      }, 1500);
-    }
-  };
-
-  const resetGame = () => {
-    sound.playPowerup();
-    stateRef.current.entities = [];
-    stateRef.current.playerX = 200;
-    stateRef.current.playerTargetX = 200;
-    stateRef.current.shieldEnergy = 100;
-    stateRef.current.shieldActive = false;
-    setScore(0);
-    setLives(3);
+  const resetGame = useCallback(() => {
+    const g = stateRef.current;
+    g.playerX = 200;
+    g.entities = [];
+    g.shieldFlashUntil = 0;
+    g.shieldEnergy = 100;
+    g.wellness = 85;
+    g.score = 0;
+    g.caught = {};
+    g.deflected = {};
+    g.finished = false;
+    g.currentWorldIdx = 0;
+    setWellness(85);
     setShieldEnergy(100);
-    setIsShieldActive(false);
-    setCollectedEmotions([]);
-    setRecentMessage("¡Muévete con agilidad para integrar emociones y rechazar imposiciones machistas!");
-    setIsPlaying(true);
-    setIsPaused(false);
-    setIsVictoryOpen(false);
-  };
+    setScore(0);
+    setWorldIdx(0);
+    setRecentMsg("¡Listo! Muévete a los lados para cuidar tu bienestar emocional.");
+  }, []);
 
-  // Keyboard controls (Arrow keys / A-D and Spacebar)
+  // Controles de teclado
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const onKey = (e: KeyboardEvent) => {
       if (!isPlaying || isPaused) return;
-
+      const g = stateRef.current;
       if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") {
-        stateRef.current.playerTargetX = Math.max(10, stateRef.current.playerTargetX - 45);
+        g.playerX = Math.max(8, g.playerX - 42);
       } else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") {
-        const canvas = canvasRef.current;
-        if (canvas) {
-          stateRef.current.playerTargetX = Math.min(canvas.width - stateRef.current.playerW - 10, stateRef.current.playerTargetX + 45);
-        }
-      } else if (e.key === " " || e.key === "Spacebar") {
-        e.preventDefault();
-        activateShield();
+        g.playerX = Math.min(480 - g.playerW - 8, g.playerX + 42);
       }
     };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [isPlaying, isPaused]);
 
-  // Main Action Loop
+  // Loop de Canvas
   useEffect(() => {
-    if (!isPlaying || isPaused) return;
-
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let isRunning = true;
+    let rafId = 0;
     stateRef.current.lastTime = performance.now();
 
-    const loop = (timestamp: number) => {
-      if (!isRunning) return;
+    const loop = (now: number) => {
+      const g = stateRef.current;
+      const dt = Math.min((now - g.lastTime) / 1000, 0.05);
+      g.lastTime = now;
 
-      const state = stateRef.current;
-      const dt = Math.min((timestamp - state.lastTime) / 1000, 0.05);
-      state.lastTime = timestamp;
+      // Determinación del mundo según el puntaje alcanzado
+      const currentIdx =
+        g.score >= targetScore * 0.66 ? 2 : g.score >= targetScore * 0.33 ? 1 : 0;
+      const world = ESCUDO_WORLDS[currentIdx];
 
-      const { width, height } = canvas;
+      if (isPlaying && !isPaused && !g.finished) {
+        if (currentIdx !== g.currentWorldIdx) {
+          g.currentWorldIdx = currentIdx;
+          setWorldIdx(currentIdx);
+        }
+        // Recarga continua y automática del escudo (+14% por segundo)
+        g.shieldEnergy = Math.min(100, g.shieldEnergy + dt * 14);
+        const roundedEnergy = Math.round(g.shieldEnergy);
+        if (roundedEnergy !== g.lastUiShieldEnergy) {
+          g.lastUiShieldEnergy = roundedEnergy;
+          setShieldEnergy(roundedEnergy);
+        }
 
-      // Slowly recharge shield energy
-      if (state.shieldEnergy < 100) {
-        state.shieldEnergy = Math.min(100, state.shieldEnergy + dt * 10);
-        setShieldEnergy(Math.round(state.shieldEnergy));
-      }
+        // Aparición de entidades
+        const spawnEvery = difficulty === "facil" ? 1150 : difficulty === "normal" ? 950 : 780;
+        if (now - g.lastSpawn > spawnEvery) {
+          g.lastSpawn = now;
+          const roll = Math.random();
+          if (roll < 0.12) {
+            g.entities.push({
+              id: g.nextId++,
+              x: 20 + Math.random() * (canvas.width - 120),
+              y: -24,
+              speed: 95 * world.speedMultiplier,
+              kind: "powerup",
+              label: "Recarga Escudo",
+              icon: "⚡",
+              explanation: "¡Energía del escudo y bienestar restablecidos al 100%!",
+            });
+          } else if (roll < 0.58) {
+            const em: EmotionEntityData =
+              HEALTHY_EMOTIONS_POOL[Math.floor(Math.random() * HEALTHY_EMOTIONS_POOL.length)];
+            g.entities.push({
+              id: g.nextId++,
+              x: 20 + Math.random() * (canvas.width - 130),
+              y: -24,
+              speed: (90 + Math.random() * 35) * world.speedMultiplier,
+              kind: "emotion",
+              label: em.shortLabel,
+              icon: em.icon,
+              explanation: em.explanation,
+            });
+          } else {
+            const tx: EmotionEntityData =
+              TOXIC_MANDATES_POOL[Math.floor(Math.random() * TOXIC_MANDATES_POOL.length)];
+            g.entities.push({
+              id: g.nextId++,
+              x: 20 + Math.random() * (canvas.width - 130),
+              y: -24,
+              speed: (100 + Math.random() * 45) * world.speedMultiplier,
+              kind: "toxic",
+              label: tx.shortLabel,
+              icon: tx.icon,
+              explanation: tx.explanation,
+            });
+          }
+        }
 
-      // Smooth player movement
-      state.playerX += (state.playerTargetX - state.playerX) * 0.2;
+        const playerY = canvas.height - 52;
 
-      // Spawn items periodically
-      if (timestamp - state.lastSpawn > 1100) {
-        state.lastSpawn = timestamp;
-        const isEmotion = Math.random() > 0.42;
-        const pool = isEmotion ? HEALTHY_EMOTIONS : TOXIC_MANDATES;
-        const chosen = pool[Math.floor(Math.random() * pool.length)];
+        g.entities = g.entities.filter((ent) => {
+          ent.y += ent.speed * dt;
+          const hit =
+            ent.y + 28 >= playerY &&
+            ent.y <= playerY + 34 &&
+            ent.x + 112 >= g.playerX &&
+            ent.x <= g.playerX + g.playerW;
 
-        state.entities.push({
-          id: state.nextId++,
-          x: Math.random() * (width - 130) + 15,
-          y: -25,
-          speed: 85 + Math.random() * 45, // px/sec controlled speed
-          type: isEmotion ? "emotion" : "toxic",
-          text: chosen.text,
-          icon: chosen.icon,
-          explanation: chosen.explanation,
+          if (hit) {
+            if (ent.kind === "powerup") {
+              playPowerup();
+              g.shieldEnergy = 100;
+              g.wellness = Math.min(100, g.wellness + 15);
+              setRecentMsg(ent.explanation);
+            } else if (ent.kind === "emotion") {
+              playCorrect();
+              g.score += 75;
+              g.wellness = Math.min(100, g.wellness + 8);
+              const prevItem = g.caught[ent.label] || {
+                count: 0,
+                explanation: ent.explanation,
+                icon: ent.icon,
+              };
+              g.caught[ent.label] = { ...prevItem, count: prevItem.count + 1 };
+              setScore(g.score);
+              setRecentMsg(`✓ ${ent.label}: ${ent.explanation}`);
+            } else {
+              // Mandato tóxico: si el escudo tiene al menos 18% de energía, repele automáticamente
+              if (g.shieldEnergy >= 18) {
+                playShield();
+                g.shieldEnergy = Math.max(0, g.shieldEnergy - 18);
+                g.shieldFlashUntil = now + 400; // Efecto visual de cúpula
+                g.score += 40;
+                const prevTx = g.deflected[ent.label] || {
+                  count: 0,
+                  explanation: ent.explanation,
+                  icon: ent.icon,
+                };
+                g.deflected[ent.label] = { ...prevTx, count: prevTx.count + 1 };
+                setScore(g.score);
+                setRecentMsg(`🛡️ Escudo repelió "${ent.label}" con éxito.`);
+              } else {
+                playAlert();
+                g.wellness = Math.max(0, g.wellness - 20);
+                setRecentMsg(`⚠️ "${ent.label}": ${ent.explanation}`);
+              }
+            }
+            setWellness(g.wellness);
+            return false;
+          }
+          return ent.y < canvas.height + 30;
         });
+
+        // Generar componente de revisión para leer al final
+        const createReviewContent = () => (
+          <div className="space-y-4">
+            <div className="border-b border-cyan-200 pb-2">
+              <h4 className="font-black text-sm text-cyan-950 flex items-center gap-1.5">
+                <span>📖</span> Resumen Socioemocional para Leer con Calma
+              </h4>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Conoce por qué las emociones que viviste son clave para una vida libre y sana:
+              </p>
+            </div>
+
+            {/* Emociones sanas atrapadas */}
+            <div className="space-y-2">
+              <p className="text-xs font-black text-emerald-800 uppercase tracking-wide flex items-center gap-1">
+                <span>💚</span> Emociones sanas expresadas:
+              </p>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                {Object.entries(g.caught).length === 0 ? (
+                  <p className="text-xs text-slate-500 italic bg-slate-50 p-2 rounded-xl">
+                    No atrapaste emociones en este intento. ¡Inténtalo de nuevo!
+                  </p>
+                ) : (
+                  Object.entries(g.caught).map(([label, info]) => (
+                    <div
+                      key={label}
+                      className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-2.5 text-xs"
+                    >
+                      <span className="font-black text-emerald-950">
+                        {info.icon} {label} (×{info.count}):
+                      </span>{" "}
+                      <span className="text-slate-700">{info.explanation}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Mandatos repelidos */}
+            <div className="space-y-2">
+              <p className="text-xs font-black text-rose-800 uppercase tracking-wide flex items-center gap-1">
+                <span>🛑</span> Mandatos rígidos repelidos por tu escudo:
+              </p>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                {Object.entries(g.deflected).length === 0 ? (
+                  <p className="text-xs text-slate-500 italic bg-slate-50 p-2 rounded-xl">
+                    Ningún mandato repelido aún.
+                  </p>
+                ) : (
+                  Object.entries(g.deflected).map(([label, info]) => (
+                    <div
+                      key={label}
+                      className="bg-rose-50/80 border border-rose-200 rounded-xl p-2.5 text-xs"
+                    >
+                      <span className="font-black text-rose-900 line-through">
+                        {info.icon} &ldquo;{label}&rdquo; (×{info.count}):
+                      </span>{" "}
+                      <span className="text-slate-700">{info.explanation}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        );
+
+        // Fin por victoria
+        if (g.score >= targetScore && !g.finished) {
+          g.finished = true;
+          setIsPlaying(false);
+          const stars: 0 | 1 | 2 | 3 = g.wellness >= 70 ? 3 : g.wellness >= 40 ? 2 : 1;
+
+          // Mensaje adaptativo exacto según el mundo completado (evita decir 3 mundos si solo jugó 1)
+          const worldsVisited = g.currentWorldIdx + 1;
+          const worldMsg =
+            worldsVisited === 1
+              ? `¡Completaste con éxito el ${ESCUDO_WORLDS[0].name} cuidando tu bienestar emocional!`
+              : worldsVisited === 2
+              ? `¡Avanzaste por 2 mundos (Patio y Bosque Cuauhtémoc) cuidando tu bienestar emocional!`
+              : `¡Recorriste los 3 mundos visuales protegiendo tu bienestar emocional!`;
+
+          onComplete(stars, g.score, targetScore, worldMsg, createReviewContent());
+        } else if (g.wellness <= 0 && !g.finished) {
+          // Fin por agotamiento
+          g.finished = true;
+          setIsPlaying(false);
+          const stars: 0 | 1 | 2 | 3 = g.score >= targetScore * 0.4 ? 1 : 0;
+          onComplete(
+            stars,
+            g.score,
+            targetScore,
+            "Los mandatos de presión agotaron tu barra de bienestar. ¡Permite que el escudo se recargue y vuelve a intentarlo!",
+            createReviewContent()
+          );
+        }
       }
 
-      // Clear
-      ctx.clearRect(0, 0, width, height);
+      // Dibujo del escenario del mundo actual
+      const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      grad.addColorStop(0, world.skyTop);
+      grad.addColorStop(1, world.skyBottom);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Draw Player
-      ctx.fillStyle = state.shieldActive ? "#06b6d4" : "#3b82f6";
+      // Suelo del mundo
+      ctx.fillStyle = world.groundColor;
+      ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+
+      // Etiqueta del mundo actual
+      ctx.fillStyle = currentIdx === 2 ? "#e0e7ff" : "#0f172a";
+      ctx.font = "bold 11px system-ui";
+      ctx.textAlign = "left";
+      ctx.fillText(world.name, 12, 20);
+
+      // Entidades que caen
+      g.entities.forEach((ent) => {
+        ctx.fillStyle =
+          ent.kind === "emotion" ? "#dcfce7" : ent.kind === "powerup" ? "#fef9c3" : "#ffe4e6";
+        ctx.strokeStyle =
+          ent.kind === "emotion" ? "#16a34a" : ent.kind === "powerup" ? "#eab308" : "#e11d48";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(ent.x, ent.y, 112, 28, 14);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#0f172a";
+        ctx.font = "bold 11px system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText(`${ent.icon} ${ent.label}`, ent.x + 56, ent.y + 18);
+      });
+
+      // Personaje y su Escudo
+      const px = g.playerX;
+      const py = canvas.height - 52;
+      const isFlashingShield = performance.now() < g.shieldFlashUntil;
+      const shieldReady = g.shieldEnergy >= 18;
+
+      // Cúpula protectora del escudo (brilla cuando está activo o cuando repele)
+      ctx.strokeStyle = isFlashingShield ? "#38bdf8" : shieldReady ? "rgba(56, 189, 248, 0.45)" : "rgba(226, 232, 240, 0.3)";
+      ctx.lineWidth = isFlashingShield ? 5 : 2.5;
       ctx.beginPath();
-      ctx.roundRect(state.playerX, height - 38, state.playerW, state.playerH, 8);
+      ctx.arc(px + g.playerW / 2, py + 15, 46, Math.PI, 0);
+      ctx.stroke();
+
+      // Cuerpo del avatar
+      ctx.fillStyle = world.accent;
+      ctx.beginPath();
+      ctx.roundRect(px, py, g.playerW, 30, 12);
       ctx.fill();
 
-      // Shield Aura when active
-      if (state.shieldActive) {
-        ctx.strokeStyle = "#38bdf8";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(state.playerX + state.playerW / 2, height - 23, state.playerW * 0.7, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      // Player Label
       ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 11px sans-serif";
+      ctx.font = "bold 11px system-ui";
       ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
       ctx.fillText(
-        state.shieldActive ? "🛡️ Escudo ON" : "🧘 Yo Auténtico",
-        state.playerX + state.playerW / 2,
-        height - 23
+        isFlashingShield ? "🛡️ ¡REPELIDO!" : shieldReady ? "🛡️ PROTEGIDO" : "⚠️ SIN ESCUDO",
+        px + g.playerW / 2,
+        py + 19
       );
 
-      // Process Falling Entities
-      const remaining: FallingEntity[] = [];
-
-      for (const ent of state.entities) {
-        ent.y += ent.speed * dt;
-
-        // Collision Check
-        const hitX = ent.x + 55 > state.playerX && ent.x < state.playerX + state.playerW;
-        const hitY = ent.y + 18 > height - 38 && ent.y < height - 10;
-
-        if (hitX && hitY) {
-          if (ent.type === "emotion") {
-            sound.playCorrect();
-            setScore((s) => s + 50);
-            setRecentMessage(`✨ Acogiste: "${ent.text}" — ${ent.explanation}`);
-            setCollectedEmotions((prev) => [
-              { text: ent.text, icon: ent.icon, explanation: ent.explanation },
-              ...prev.slice(0, 4),
-            ]);
-
-            // Victory check
-            if (score + 50 >= 300) {
-              sound.playCelebration();
-              setIsVictoryOpen(true);
-              setIsPlaying(false);
-              return;
-            }
-          } else {
-            // Toxic Mandate hit
-            if (state.shieldActive) {
-              sound.playShield();
-              setScore((s) => s + 25);
-              setRecentMessage(`🛡️ ¡Tu escudo rechazó la presión: "${ent.text}"!`);
-            } else {
-              sound.playAlert();
-              setLives((l) => {
-                const updated = l - 1;
-                if (updated <= 0) {
-                  setIsPlaying(false);
-                }
-                return updated;
-              });
-              setRecentMessage(`⚠️ Mandato impuesto: "${ent.text}" — ${ent.explanation}`);
-            }
-          }
-          continue;
-        }
-
-        if (ent.y < height + 30) {
-          // Draw falling pill
-          ctx.fillStyle = ent.type === "emotion" ? "#10b981" : "#ef4444";
-          ctx.beginPath();
-          ctx.roundRect(ent.x, ent.y, 125, 26, 6);
-          ctx.fill();
-
-          ctx.fillStyle = "#ffffff";
-          ctx.font = "bold 9.5px sans-serif";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText(`${ent.icon} ${ent.text}`, ent.x + 62, ent.y + 13);
-
-          remaining.push(ent);
-        }
-      }
-
-      state.entities = remaining;
-      state.animationId = requestAnimationFrame(loop);
+      rafId = requestAnimationFrame(loop);
     };
 
-    stateRef.current.animationId = requestAnimationFrame(loop);
+    rafId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafId);
+  }, [isPlaying, isPaused, difficulty, targetScore, onComplete, playAlert, playCorrect, playPowerup, playShield]);
 
-    return () => {
-      isRunning = false;
-      cancelAnimationFrame(stateRef.current.animationId);
-    };
-  }, [isPlaying, isPaused, score]);
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const movePointer = (clientX: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    stateRef.current.playerTargetX = Math.max(10, Math.min(canvas.width - stateRef.current.playerW - 10, mouseX - stateRef.current.playerW / 2));
-  };
-
-  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !e.touches[0]) return;
-    const rect = canvas.getBoundingClientRect();
-    const touchX = e.touches[0].clientX - rect.left;
-    stateRef.current.playerTargetX = Math.max(10, Math.min(canvas.width - stateRef.current.playerW - 10, touchX - stateRef.current.playerW / 2));
-  };
-
-  const movePlayerStep = (delta: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    stateRef.current.playerTargetX = Math.max(10, Math.min(canvas.width - stateRef.current.playerW - 10, stateRef.current.playerTargetX + delta));
+    const scaleX = canvas.width / rect.width;
+    const x = (clientX - rect.left) * scaleX - stateRef.current.playerW / 2;
+    stateRef.current.playerX = Math.max(6, Math.min(canvas.width - stateRef.current.playerW - 6, x));
   };
 
   return (
-    <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border-2 border-indigo-100 max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <GameHeader
-        title="🛡️ El Escudo Emocional"
-        badge="Nuevas masculinidades, salud socioemocional y empatía"
-        levelBadge="Nivel Intermedio (10 a 13 años)"
-        levelColor="rose"
-        odsTarget="Salud y Equidad"
-        score={score}
-        stars={lives}
-        maxStars={3}
-        onOpenHelp={() => setIsHelpOpen(true)}
-        onOpenInstructions={() => setIsInstructionsOpen(true)}
-        onRestart={resetGame}
-        onPause={() => setIsPaused(!isPaused)}
-        isPaused={isPaused}
+    <div className="bg-white rounded-4xl border-2 border-cyan-200 shadow-xl p-5 sm:p-7 space-y-5">
+      {/* HUD: Barras de Bienestar y Escudo Automático */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center pb-3 border-b border-slate-100">
+        <div>
+          <div className="flex justify-between text-xs font-black text-slate-700 mb-1">
+            <span>💚 Bienestar Emocional</span>
+            <span>{wellness}%</span>
+          </div>
+          <div className="h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+            <div
+              className={`h-full transition-all ${wellness > 50 ? "bg-emerald-500" : "bg-rose-500"}`}
+              style={{ width: `${wellness}%` }}
+            />
+          </div>
+        </div>
+
+        <div>
+          <div className="flex justify-between text-xs font-black text-slate-700 mb-1">
+            <span>🛡️ Escudo Automático (Recarga sola)</span>
+            <span className={shieldEnergy >= 18 ? "text-sky-700" : "text-rose-600 font-bold"}>
+              {shieldEnergy >= 18 ? `${shieldEnergy}% (Listo)` : "Recargando..."}
+            </span>
+          </div>
+          <div className="h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+            <div className="h-full bg-sky-500 transition-all" style={{ width: `${shieldEnergy}%` }} />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2">
+          <span className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-900 text-xs font-black">
+            Meta: {score}/{targetScore}
+          </span>
+          {!isPlaying ? (
+            <Button3D
+              variant="intermedio"
+              size="sm"
+              onClick={() => {
+                playClick();
+                if (stateRef.current.finished) resetGame();
+                setIsPlaying(true);
+                setIsPaused(false);
+              }}
+              icon={<Play className="w-4 h-4 fill-current" />}
+            >
+              Jugar
+            </Button3D>
+          ) : (
+            <Button3D
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsPaused((p) => !p)}
+              icon={<Pause className="w-4 h-4" />}
+            >
+              {isPaused ? "Seguir" : "Pausa"}
+            </Button3D>
+          )}
+          <button
+            onClick={() => {
+              playClick();
+              setIsPlaying(false);
+              resetGame();
+            }}
+            className="min-h-[44px] px-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold"
+            aria-label="Reiniciar juego"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Mensaje de retroalimentación en vivo */}
+      <div className="p-3 rounded-2xl bg-sky-50 border border-sky-200 text-xs sm:text-sm font-bold text-sky-950 flex items-center justify-between gap-2">
+        <span className="truncate">{recentMsg}</span>
+        <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-white text-sky-800 shrink-0">
+          {ESCUDO_WORLDS[worldIdx].name}
+        </span>
+      </div>
+
+      <canvas
+        ref={canvasRef}
+        width={480}
+        height={320}
+        onMouseMove={(e) => isPlaying && !isPaused && movePointer(e.clientX)}
+        onTouchMove={(e) => isPlaying && !isPaused && e.touches[0] && movePointer(e.touches[0].clientX)}
+        className="w-full max-w-2xl mx-auto block rounded-3xl border-4 border-sky-200 shadow-md cursor-ew-resize"
+        aria-label="Escenario 2D El Escudo Emocional"
       />
 
-      {/* Control Status Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-100 p-2 rounded-2xl">
-        <div className="flex items-center gap-3">
-          {/* Energy Bar */}
-          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200">
-            <Zap className="w-4 h-4 text-cyan-600" />
-            <span className="text-xs font-bold text-slate-700">Escudo:</span>
-            <div className="w-20 h-2.5 bg-slate-200 rounded-full overflow-hidden">
-              <div
-                style={{ width: `${shieldEnergy}%` }}
-                className="h-full bg-cyan-500 transition-all duration-300"
-              />
-            </div>
-            <span className="text-[10px] font-black text-cyan-800">{shieldEnergy}%</span>
+      {/* Controles táctiles sencillos + indicador de escudo automático */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 flex-1">
+          <button
+            onClick={() => (stateRef.current.playerX = Math.max(8, stateRef.current.playerX - 45))}
+            className="min-h-[48px] flex-1 rounded-2xl bg-slate-100 hover:bg-slate-200 font-black text-xs inline-flex items-center justify-center gap-1 border border-slate-300"
+            aria-label="Mover a la izquierda"
+          >
+            <ChevronLeft className="w-4 h-4" /> Mover Izquierda (←)
+          </button>
+
+          <div className="px-3.5 py-2.5 rounded-2xl bg-sky-100/80 border border-sky-300 text-sky-900 text-xs font-black inline-flex items-center gap-1.5 shrink-0">
+            <Shield className="w-4 h-4 text-sky-600" />
+            <span>Escudo Automático Activo</span>
           </div>
 
           <button
-            onClick={activateShield}
-            disabled={shieldEnergy < 25}
-            className={`px-3 py-1.5 rounded-xl text-xs font-black shadow-xs transition-all ${
-              shieldEnergy >= 25
-                ? "bg-cyan-600 hover:bg-cyan-700 text-white"
-                : "bg-slate-200 text-slate-400 cursor-not-allowed"
-            }`}
+            onClick={() => (stateRef.current.playerX = Math.min(400, stateRef.current.playerX + 45))}
+            className="min-h-[48px] flex-1 rounded-2xl bg-slate-100 hover:bg-slate-200 font-black text-xs inline-flex items-center justify-center gap-1 border border-slate-300"
+            aria-label="Mover a la derecha"
           >
-            🛡️ Activar Escudo (Espacio)
+            Mover Derecha (→) <ChevronRight className="w-4 h-4" />
           </button>
         </div>
-
-        {/* Lives */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 text-rose-500">
-            {[...Array(3)].map((_, i) => (
-              <Heart
-                key={i}
-                className={`w-4 h-4 ${
-                  i < lives ? "fill-rose-500 text-rose-500" : "text-slate-300"
-                }`}
-              />
-            ))}
-          </div>
-
-          <span className="text-xs font-bold text-slate-500">
-            Meta: 300 pts
-          </span>
-        </div>
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-        {/* Canvas Area */}
-        <div className="md:col-span-7 flex flex-col items-center">
-          <div className="relative rounded-3xl overflow-hidden border-4 border-slate-900 bg-gradient-to-b from-slate-950 via-indigo-950 to-slate-950 shadow-2xl w-full max-w-[480px]">
-            <canvas
-              ref={canvasRef}
-              width={480}
-              height={320}
-              onMouseMove={handleMouseMove}
-              onTouchMove={handleTouchMove}
-              className="w-full h-auto cursor-ew-resize block"
-            />
-
-            {!isPlaying && (
-              <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center text-white">
-                <Shield className="w-12 h-12 text-cyan-400 mb-2 animate-bounce" />
-                <h3 className="font-black text-lg">Acoge lo que sientes</h3>
-                <p className="text-xs text-slate-300 mt-1 max-w-xs leading-relaxed">
-                  🟢 Atrapa las emociones humanas saludables (+50 pts). <br />
-                  🔴 Esquiva mandatos machistas o usa tu escudo protector.
-                </p>
-                <button
-                  onClick={resetGame}
-                  className="mt-4 px-6 py-2.5 rounded-2xl bg-cyan-500 hover:bg-cyan-400 font-black text-xs text-slate-950 shadow-lg"
-                >
-                  ¡Iniciar Partida!
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* On-screen tactile controls */}
-          <div className="flex items-center gap-2 mt-3 w-full max-w-[480px]">
-            <button
-              onClick={() => movePlayerStep(-45)}
-              className="flex-1 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 text-xs font-black flex items-center justify-center gap-1 transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" /> Izquierda
-            </button>
-            <button
-              onClick={activateShield}
-              disabled={shieldEnergy < 25}
-              className="px-4 py-2.5 rounded-2xl bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-black flex items-center gap-1.5 shadow-sm"
-            >
-              <Shield className="w-3.5 h-3.5" /> Escudo
-            </button>
-            <button
-              onClick={() => movePlayerStep(45)}
-              className="flex-1 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 text-xs font-black flex items-center justify-center gap-1 transition-colors"
-            >
-              Derecha <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Recent Action Card */}
-          <div className="w-full max-w-[480px] mt-2 p-3 bg-slate-100 rounded-2xl text-xs font-bold text-slate-800 text-center leading-snug">
-            {recentMessage}
-          </div>
-        </div>
-
-        {/* Collected Healthy Emotions Showcase */}
-        <div className="md:col-span-5 bg-slate-50 rounded-3xl p-5 border-2 border-slate-200/80 shadow-sm h-[390px] flex flex-col justify-between">
-          <div>
-            <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-2 flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-emerald-600" />
-              Emociones que has acogido:
-            </h4>
-            <p className="text-[11px] text-slate-500 mb-3">
-              Las emociones nunca son debilidad; expresarlas saludablemente nos hace personas libres y empáticas.
-            </p>
-
-            <div className="space-y-2 overflow-y-auto max-h-[240px] pr-1">
-              {collectedEmotions.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="bg-white p-2.5 rounded-2xl border border-emerald-200 text-xs shadow-2xs animate-fadeIn"
-                >
-                  <div className="flex items-center gap-2 font-black text-emerald-900">
-                    <span className="text-base">{item.icon}</span>
-                    <span>{item.text}</span>
-                  </div>
-                  <p className="text-[11px] text-slate-600 mt-1 leading-tight">
-                    {item.explanation}
-                  </p>
-                </div>
-              ))}
-
-              {collectedEmotions.length === 0 && (
-                <p className="text-xs text-slate-400 italic text-center py-8">
-                  Atrapa rectángulos verdes para registrar reflexiones socioemocionales.
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="p-3 bg-cyan-50 rounded-2xl border border-cyan-200 text-[11px] text-cyan-950 font-medium">
-            <strong>Consejo para varones:</strong> Rompe el mandato del silencio. Expresar tristeza o pedir un abrazo demuestra auténtica valentía y previene agresiones.
-          </div>
-        </div>
-      </div>
-
-      {/* Modals */}
-      <InstructionsModal
-        isOpen={isInstructionsOpen}
-        onClose={() => setIsInstructionsOpen(false)}
-        title="Instrucciones: El Escudo Emocional"
-        objective="Aprender a validar las emociones humanas (tristeza, ternura, miedo, pedir ayuda) y esquivar mandatos machistas que reprimen los sentimientos."
-        rules={[
-          "Mueve a tu personaje hacia los lados con las flechas del teclado, deslizando el mouse o tocando la pantalla.",
-          "Atrapa los bloques verdes que representan emociones válidas para sumar puntos y comprender su valor.",
-          "Esquiva los bloques rojos de mandatos machistas o presiona 'Espacio' para activar tu escudo protector temporal."
-        ]}
-        tips={[
-          "Las emociones nunca son negativas ni obstáculos.",
-          "Llega a 300 puntos para completar el reto con honores."
-        ]}
-      />
-
-      <VictoryModal
-        isOpen={isVictoryOpen}
-        title="¡Campeón de la Salud Socioemocional!"
-        score={score}
-        stars={lives}
-        maxStars={3}
-        takeaway="Has demostrado que las emociones no tienen género, que los hombres también pueden llorar, pedir ayuda y ser empáticos sin miedo al qué dirán."
-        summaryPoints={[
-          "Reconociste el valor de pedir ayuda y expresar vulnerabilidad.",
-          "Rechazaste la presión social que impone resolver conflictos a golpes.",
-          "Fortaleciste una masculinidad empática, responsable y pacífica."
-        ]}
-        onRestart={resetGame}
-      />
-
-      <PauseModal
-        isOpen={isPaused}
-        onResume={() => setIsPaused(false)}
-        onRestart={resetGame}
-        onOpenHelp={() => setIsHelpOpen(true)}
-      />
-
-      <EmergencyHelpModal
-        isOpen={isHelpOpen}
-        onClose={() => setIsHelpOpen(false)}
-      />
     </div>
+  );
+}
+
+export default function EscudoEmocional({ onHome, onNextGame }: GameProps) {
+  return (
+    <GameShell
+      gameId="escudo"
+      tutorialSteps={ESCUDO_TUTORIAL}
+      difficulties={[
+        { id: "facil", label: "Nivel 1 · 400 pts", subtitle: "Patio Escolar y ritmo tranquilo", emoji: "💚" },
+        { id: "normal", label: "Nivel 2 · 650 pts", subtitle: "2 mundos visuales y mandatos más rápidos", emoji: "🛡️" },
+        { id: "reto", label: "Nivel 3 · 900 pts", subtitle: "3 mundos completos con velocidad arcade", emoji: "⚡" },
+      ]}
+      onHome={onHome}
+      onNextGame={onNextGame}
+    >
+      {({ difficulty, finishGame }) => (
+        <EscudoGameplay difficulty={difficulty} onComplete={finishGame} />
+      )}
+    </GameShell>
   );
 }

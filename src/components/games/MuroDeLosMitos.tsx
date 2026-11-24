@@ -1,29 +1,24 @@
 "use client";
 
 import React, { useRef, useEffect, useState, useCallback } from "react";
-import {
-  Zap,
-  Play,
-  Pause,
-  RotateCcw,
-  Award,
-  ChevronLeft,
-  ChevronRight,
-  Layers,
-  Heart,
-  Volume2,
-  Sparkles,
-  Shield,
-  Clock,
-  Gauge
-} from "lucide-react";
-import confetti from "canvas-confetti";
-import GameHeader from "@/components/common/GameHeader";
-import InstructionsModal from "@/components/common/InstructionsModal";
-import VictoryModal from "@/components/common/VictoryModal";
-import PauseModal from "@/components/common/PauseModal";
-import EmergencyHelpModal from "@/components/common/EmergencyHelpModal";
-import { sound } from "@/utils/audio";
+import { Play, Pause, RotateCcw, ChevronLeft, ChevronRight, Heart, Flame, Zap } from "lucide-react";
+import GameShell, { DifficultyLevel } from "@/components/common/GameShell";
+import Button3D from "@/components/common/Button3D";
+import { MYTH_BRICKS_POOL, MURO_TUTORIAL } from "@/content/game4-muro";
+import { useSound } from "@/hooks/useSound";
+
+interface GameProps {
+  onHome?: () => void;
+  onNextGame?: () => void;
+}
+
+interface Ball {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  r: number;
+}
 
 interface Brick {
   x: number;
@@ -32,11 +27,18 @@ interface Brick {
   h: number;
   myth: string;
   truth: string;
-  alive: boolean;
-  maxHits: number;
-  hitsLeft: number;
-  isSpecial?: boolean;
   color: string;
+  alive: boolean;
+  hitsLeft: number;
+  maxHits: number;
+}
+
+interface PowerUp {
+  x: number;
+  y: number;
+  vy: number;
+  type: "multi" | "wide" | "slow";
+  label: string;
 }
 
 interface Particle {
@@ -49,110 +51,119 @@ interface Particle {
   size: number;
 }
 
-type SpeedSetting = "tranquila" | "normal" | "desafio";
-
-const MYTH_DATA_LEVEL_1 = [
-  { myth: "Los hombres no lloran", truth: "Llorar es una respuesta humana saludable que libera emociones y alivia el dolor.", color: "#f43f5e", resistant: true },
-  { myth: "Las niñas son débiles", truth: "La tenacidad, la valentía y la fuerza intelectual y física no tienen género.", color: "#ec4899", resistant: false },
-  { myth: "El rosa es solo para niñas", truth: "Los colores son luz y percepción estética; no tienen asignación biológica de género.", color: "#a855f7", resistant: false },
-  { myth: "Cocinar es solo de mujeres", truth: "Cocinar y alimentarse son habilidades universales de supervivencia y autonomía humana.", color: "#6366f1", resistant: true },
-  { myth: "Ellas deben aguantar todo", truth: "Nadie debe tolerar maltrato ni violencia. El respeto mutuo es innegociable.", color: "#0ea5e9", resistant: false },
-  { myth: "Los celos demuestran amor", truth: "Los celos reflejan inseguridad y afán de control; el amor sano respeta la libertad.", color: "#10b981", resistant: true, isSpecial: true },
-];
-
-const MYTH_DATA_LEVEL_2 = [
-  { myth: "No es carrera para mujeres", truth: "Las mujeres lideran misiones aeroespaciales, medicina e ingenierías en todo el mundo.", color: "#6366f1", resistant: true },
-  { myth: "Los niños deben pelear", truth: "El verdadero carácter se demuestra resolviendo conflictos mediante el diálogo y la empatía.", color: "#0ea5e9", resistant: false },
-  { myth: "Ellas visten para provocar", truth: "La vestimenta es libertad individual; el respeto a la dignidad ajena es una obligación absoluta.", color: "#f43f5e", resistant: true },
-  { myth: "Los varones mandan siempre", truth: "El liderazgo eficaz se fundamenta en la cooperación ética y la escucha activa.", color: "#f59e0b", resistant: false },
-  { myth: "La mujer es para el hogar", truth: "Toda persona tiene derecho a forjar su proyecto de vida académico y profesional.", color: "#14b8a6", resistant: false },
-  { myth: "Es broma, no te ofendas", truth: "El humor denigrante o machista daña la convivencia. Si lastima a alguien, no es gracioso.", color: "#ec4899", resistant: true, isSpecial: true },
-];
-
-export default function MuroDeLosMitos() {
+function MuroGameplay({
+  difficulty,
+  onComplete,
+}: {
+  difficulty: DifficultyLevel;
+  onComplete: (
+    stars: 0 | 1 | 2 | 3,
+    score: number,
+    maxScore: number,
+    msg: string,
+    extraContent?: React.ReactNode
+  ) => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [level, setLevel] = useState<number>(1);
-  const [speedSetting, setSpeedSetting] = useState<SpeedSetting>("tranquila");
-  const [gameState, setGameState] = useState<"menu" | "countdown" | "playing" | "paused" | "gameover" | "levelwon">("menu");
-  const [countdown, setCountdown] = useState<number>(3);
-  const [lives, setLives] = useState<number>(3);
-  const [score, setScore] = useState<number>(0);
+  const { playBrickHit, playBounce, playPowerup, playAlert, playCorrect, playClick } = useSound();
+
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [lives, setLives] = useState(3);
+  const [score, setScore] = useState(0);
+  const [combo, setCombo] = useState(0);
+  const [activeEffect, setActiveEffect] = useState<string | null>(null);
   const [unlockedTruths, setUnlockedTruths] = useState<{ myth: string; truth: string }[]>([]);
-  const [isInstructionsOpen, setIsInstructionsOpen] = useState<boolean>(false);
-  const [isVictoryOpen, setIsVictoryOpen] = useState<boolean>(false);
-  const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
 
-  // Speed constants in pixels per second
-  const getBaseSpeed = useCallback(() => {
-    switch (speedSetting) {
-      case "tranquila":
-        return 205; // 205 px/sec (calm, precise, perfectly controllable)
-      case "normal":
-        return 235; // 235 px/sec (standard arcade)
-      case "desafio":
-        return 270; // 270 px/sec (slightly faster)
-    }
-  }, [speedSetting]);
+  const baseSpeed = difficulty === "facil" ? 210 : difficulty === "normal" ? 245 : 285;
+  const brickCount = difficulty === "facil" ? 6 : difficulty === "normal" ? 9 : 12;
 
-  // Physical game state in Ref to calculate exact delta-time
-  const stateRef = useRef({
-    paddleX: 180,
-    paddleW: 105, // slightly wider paddle
+  const gameRef = useRef({
+    paddleX: 185,
+    paddleW: 110,
     paddleH: 14,
-    paddleTargetX: 180,
-    ballX: 240,
-    ballY: 260,
-    ballVX: 120, // px/sec
-    ballVY: -190, // px/sec
-    ballR: 8,
+    balls: [] as Ball[],
     bricks: [] as Brick[],
+    powerUps: [] as PowerUp[],
     particles: [] as Particle[],
     lastTime: 0,
-    animationFrameId: 0,
-    paddleExpandedUntil: 0,
+    wideUntil: 0,
+    slowUntil: 0,
+    combo: 0,
+    score: 0,
+    lives: 3,
+    finished: false,
   });
 
-  const initBricks = useCallback((lvl: number) => {
-    const mythPool = lvl === 1 ? MYTH_DATA_LEVEL_1 : MYTH_DATA_LEVEL_2;
+  const populateGameRefs = useCallback(() => {
+    const g = gameRef.current;
     const cols = 3;
-    const rows = 2;
-    const brickW = 140;
-    const brickH = 28;
+    const brickW = 142;
+    const brickH = 30;
     const gap = 12;
-    const startX = 20;
-    const startY = 35;
+    const startX = 16;
+    const startY = 34;
 
-    const newBricks: Brick[] = [];
-    mythPool.forEach((item, idx) => {
+    const pool = MYTH_BRICKS_POOL.slice(0, brickCount);
+    g.bricks = pool.map((item, idx) => {
       const r = Math.floor(idx / cols);
       const c = idx % cols;
-      newBricks.push({
-        x: startX + c * (brickW + gap),
+      const offsetX = difficulty === "reto" && r % 2 === 1 ? 8 : 0;
+      const hits = difficulty === "facil" ? 1 : item.resistant ? 2 : 1;
+      return {
+        x: startX + c * (brickW + gap) + offsetX,
         y: startY + r * (brickH + gap),
-        w: brickW,
+        w: brickW - (difficulty === "reto" ? 8 : 0),
         h: brickH,
         myth: item.myth,
         truth: item.truth,
-        alive: true,
-        maxHits: item.resistant ? 2 : 1,
-        hitsLeft: item.resistant ? 2 : 1,
-        isSpecial: item.isSpecial,
         color: item.color,
-      });
+        alive: true,
+        hitsLeft: hits,
+        maxHits: hits,
+      };
     });
 
-    stateRef.current.bricks = newBricks;
-  }, []);
+    g.paddleW = difficulty === "facil" ? 125 : 108;
+    g.paddleX = (480 - g.paddleW) / 2;
+    g.balls = [{ x: 240, y: 270, vx: baseSpeed * 0.55, vy: -baseSpeed * 0.85, r: 8 }];
+    g.powerUps = [];
+    g.particles = [];
+    g.combo = 0;
+    g.score = 0;
+    g.lives = 3;
+    g.wideUntil = 0;
+    g.slowUntil = 0;
+    g.finished = false;
+  }, [brickCount, difficulty, baseSpeed]);
+
+  const buildLevel = useCallback(() => {
+    populateGameRefs();
+    setLives(3);
+    setScore(0);
+    setCombo(0);
+    setUnlockedTruths([]);
+    setActiveEffect(null);
+  }, [populateGameRefs]);
+
+  useEffect(() => {
+    populateGameRefs();
+  }, [populateGameRefs]);
 
   const spawnParticles = (x: number, y: number, color: string) => {
-    for (let i = 0; i < 8; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 40 + Math.random() * 80;
-      stateRef.current.particles.push({
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      (window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+        document.documentElement.classList.contains("reduce-motion"));
+    if (reduceMotion) return;
+    for (let i = 0; i < 12; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const spd = 45 + Math.random() * 110;
+      gameRef.current.particles.push({
         x,
         y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
         color,
         alpha: 1,
         size: 3 + Math.random() * 3,
@@ -160,575 +171,516 @@ export default function MuroDeLosMitos() {
     }
   };
 
-  const startCountdown = useCallback(() => {
-    setGameState("countdown");
-    setCountdown(3);
-    sound.playCountdown(false);
-
-    let count = 3;
-    const timer = setInterval(() => {
-      count--;
-      if (count > 0) {
-        setCountdown(count);
-        sound.playCountdown(false);
-      } else {
-        clearInterval(timer);
-        sound.playCountdown(true);
-        setGameState("playing");
-        stateRef.current.lastTime = performance.now();
+  // Teclado
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "p" || e.key === "P") {
+        if (isPlaying) setIsPaused((p) => !p);
+        return;
       }
-    }, 800);
-  }, []);
+      if (!isPlaying || isPaused) return;
+      const g = gameRef.current;
+      if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") {
+        g.paddleX = Math.max(4, g.paddleX - 32);
+      } else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") {
+        g.paddleX = Math.min(480 - g.paddleW - 4, g.paddleX + 32);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isPlaying, isPaused]);
 
-  const resetRound = useCallback(
-    (lvl = level) => {
-      const baseSpd = getBaseSpeed();
-      const angle = (Math.PI / 4) * (Math.random() > 0.5 ? 1 : -1) - Math.PI / 2;
-      stateRef.current.ballX = 240;
-      stateRef.current.ballY = 260;
-      stateRef.current.ballVX = Math.cos(angle) * baseSpd;
-      stateRef.current.ballVY = -Math.abs(Math.sin(angle) * baseSpd);
-      stateRef.current.paddleX = 180;
-      stateRef.current.paddleTargetX = 180;
-      stateRef.current.paddleW = 105;
-      stateRef.current.particles = [];
-      initBricks(lvl);
-      startCountdown();
-    },
-    [getBaseSpeed, initBricks, level, startCountdown]
-  );
-
-  const startNewGame = () => {
-    sound.playPowerup();
-    setScore(0);
-    setLives(3);
-    setLevel(1);
-    setUnlockedTruths([]);
-    resetRound(1);
-  };
-
+  // Loop principal delta-time
   useEffect(() => {
-    initBricks(level);
-  }, [initBricks, level]);
-
-  // Main Canvas Animation Game Loop with Delta-Time Physics
-  useEffect(() => {
-    if (gameState !== "playing") return;
-
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let isRunning = true;
-    stateRef.current.lastTime = performance.now();
+    let rafId = 0;
+    gameRef.current.lastTime = performance.now();
 
-    const loop = (currentTime: number) => {
-      if (!isRunning) return;
+    const drawFrame = () => {
+      const g = gameRef.current;
+      const W = canvas.width;
+      const H = canvas.height;
 
-      const state = stateRef.current;
-      const dt = Math.min((currentTime - state.lastTime) / 1000, 0.05); // clamp delta time
-      state.lastTime = currentTime;
+      // Fondo
+      const bg = ctx.createLinearGradient(0, 0, 0, H);
+      bg.addColorStop(0, "#0f172a");
+      bg.addColorStop(1, "#1e293b");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
 
-      const { width, height } = canvas;
-
-      // Smooth paddle movement toward target
-      state.paddleX += (state.paddleTargetX - state.paddleX) * 0.25;
-
-      // Clear Canvas
-      ctx.clearRect(0, 0, width, height);
-
-      // Draw Bricks
-      let aliveCount = 0;
-      state.bricks.forEach((b) => {
+      // Ladrillos
+      g.bricks.forEach((b) => {
         if (!b.alive) return;
-        aliveCount++;
-
-        // Brick body
-        ctx.fillStyle = b.hitsLeft === 2 ? b.color : `${b.color}b3`;
+        ctx.fillStyle = b.color;
         ctx.beginPath();
-        ctx.roundRect(b.x, b.y, b.w, b.h, 6);
+        ctx.roundRect(b.x, b.y, b.w, b.h, 7);
         ctx.fill();
 
-        // Brick stroke
-        ctx.strokeStyle = b.isSpecial ? "#fef08a" : "#ffffff";
-        ctx.lineWidth = b.isSpecial ? 2 : 1;
-        ctx.stroke();
-
-        // Special icon
-        if (b.isSpecial) {
-          ctx.fillStyle = "#fef08a";
-          ctx.font = "bold 9px sans-serif";
-          ctx.fillText("★", b.x + 8, b.y + 16);
-        }
-
-        // Text inside brick
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "bold 9px sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(b.myth, b.x + b.w / 2, b.y + b.h / 2);
-
-        // Crack line indicator if hit once
-        if (b.hitsLeft === 1 && b.maxHits === 2) {
-          ctx.strokeStyle = "#ffffff";
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.moveTo(b.x + b.w * 0.3, b.y + 4);
-          ctx.lineTo(b.x + b.w * 0.5, b.y + b.h - 4);
+        if (b.hitsLeft > 1) {
+          ctx.strokeStyle = "#fde047";
+          ctx.lineWidth = 2.5;
           ctx.stroke();
         }
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 10px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const label = b.myth.length > 20 ? `${b.myth.slice(0, 18)}…` : b.myth;
+        ctx.fillText(label, b.x + b.w / 2, b.y + b.h / 2);
       });
 
-      // Win condition
-      if (aliveCount === 0) {
-        setGameState("levelwon");
-        sound.playCelebration();
-        confetti({ particleCount: 90, spread: 75, origin: { y: 0.6 } });
-        if (level === 2) {
-          setIsVictoryOpen(true);
-        }
-        return;
-      }
-
-      // Update and draw particles
-      state.particles = state.particles.filter((p) => {
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        p.alpha -= dt * 1.5;
-        if (p.alpha <= 0) return false;
-
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = Math.max(0, p.alpha);
+      // Power-Ups
+      g.powerUps.forEach((p) => {
+        ctx.fillStyle = p.type === "multi" ? "#f59e0b" : p.type === "wide" ? "#10b981" : "#38bdf8";
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.roundRect(p.x - 18, p.y - 11, 36, 22, 11);
         ctx.fill();
-        ctx.globalAlpha = 1;
-        return true;
+        ctx.fillStyle = "#0f172a";
+        ctx.font = "bold 10px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(p.label, p.x, p.y + 0.5);
       });
 
-      // Draw Paddle
-      ctx.fillStyle = "#4f46e5";
+      // Partículas
+      g.particles.forEach((pt) => {
+        ctx.globalAlpha = pt.alpha;
+        ctx.fillStyle = pt.color;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, pt.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+
+      // Barra
+      const pw = performance.now() < g.wideUntil ? Math.min(180, g.paddleW * 1.45) : g.paddleW;
+      ctx.fillStyle = performance.now() < g.wideUntil ? "#34d399" : "#38bdf8";
       ctx.beginPath();
-      ctx.roundRect(state.paddleX, height - 24, state.paddleW, state.paddleH, 7);
+      ctx.roundRect(g.paddleX, H - 24, pw, g.paddleH, 7);
       ctx.fill();
 
-      // Draw Ball
-      ctx.fillStyle = "#fbbf24";
-      ctx.beginPath();
-      ctx.arc(state.ballX, state.ballY, state.ballR, 0, Math.PI * 2);
-      ctx.fill();
+      // Bolas
+      g.balls.forEach((ball) => {
+        ctx.fillStyle = "#fef08a";
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    };
 
-      // Ball Physics
-      state.ballX += state.ballVX * dt;
-      state.ballY += state.ballVY * dt;
+    const tick = (now: number) => {
+      const g = gameRef.current;
+      const dt = Math.min((now - g.lastTime) / 1000, 0.05);
+      g.lastTime = now;
 
-      // Left and Right Wall bounce
-      if (state.ballX - state.ballR <= 0) {
-        state.ballX = state.ballR;
-        state.ballVX = Math.abs(state.ballVX);
-        sound.playBounce(1);
-      } else if (state.ballX + state.ballR >= width) {
-        state.ballX = width - state.ballR;
-        state.ballVX = -Math.abs(state.ballVX);
-        sound.playBounce(1);
-      }
+      if (isPlaying && !isPaused && !g.finished) {
+        const W = canvas.width;
+        const H = canvas.height;
+        const slowFactor = now < g.slowUntil ? 0.65 : 1;
+        const pw = now < g.wideUntil ? Math.min(180, g.paddleW * 1.45) : g.paddleW;
 
-      // Top Wall bounce
-      if (state.ballY - state.ballR <= 0) {
-        state.ballY = state.ballR;
-        state.ballVY = Math.abs(state.ballVY);
-        sound.playBounce(1.1);
-      }
-
-      // Paddle Collision
-      if (
-        state.ballY + state.ballR >= height - 24 &&
-        state.ballY - state.ballR <= height - 24 + state.paddleH
-      ) {
-        if (
-          state.ballX >= state.paddleX - 4 &&
-          state.ballX <= state.paddleX + state.paddleW + 4
-        ) {
-          state.ballY = height - 24 - state.ballR;
-          // Normalized hit offset (-1 to +1)
-          const hitOffset =
-            (state.ballX - (state.paddleX + state.paddleW / 2)) / (state.paddleW / 2);
-          const baseSpd = getBaseSpeed();
-
-          // Smooth rebound angle clamp
-          const angle = (hitOffset * 0.8 * Math.PI) / 3 - Math.PI / 2;
-          state.ballVX = Math.cos(angle) * baseSpd;
-          state.ballVY = Math.sin(angle) * baseSpd;
-          sound.playBounce(1.2);
-        }
-      }
-
-      // Bottom death boundary check
-      if (state.ballY - state.ballR > height) {
-        sound.playAlert();
-        setLives((l) => {
-          const nextLives = l - 1;
-          if (nextLives <= 0) {
-            setGameState("gameover");
-          } else {
-            // Soft respawn
-            const baseSpd = getBaseSpeed();
-            state.ballX = 240;
-            state.ballY = 240;
-            state.ballVX = Math.random() > 0.5 ? baseSpd * 0.6 : -baseSpd * 0.6;
-            state.ballVY = -baseSpd * 0.8;
-            startCountdown();
-          }
-          return nextLives;
+        // Actualizar partículas
+        g.particles = g.particles.filter((p) => {
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.alpha -= dt * 2.2;
+          return p.alpha > 0;
         });
-        return;
-      }
 
-      // Brick Collisions
-      state.bricks.forEach((b) => {
-        if (!b.alive) return;
-        if (
-          state.ballX + state.ballR > b.x &&
-          state.ballX - state.ballR < b.x + b.w &&
-          state.ballY + state.ballR > b.y &&
-          state.ballY - state.ballR < b.y + b.h
-        ) {
-          b.hitsLeft -= 1;
-          state.ballVY = -state.ballVY;
-          sound.playBrickHit();
-          spawnParticles(state.ballX, state.ballY, b.color);
+        // Actualizar power-ups
+        g.powerUps = g.powerUps.filter((p) => {
+          p.y += p.vy * dt;
+          // Colisión con barra
+          if (p.y + 11 >= H - 24 && p.y - 11 <= H - 10 && p.x >= g.paddleX && p.x <= g.paddleX + pw) {
+            playPowerup();
+            if (p.type === "multi") {
+              const src = g.balls[0] || { x: W / 2, y: H - 50, vx: 120, vy: -200, r: 8 };
+              g.balls.push({ x: src.x, y: src.y, vx: -src.vx, vy: -Math.abs(src.vy), r: 8 });
+              setActiveEffect("⚡ ¡Bola Múltiple activa!");
+            } else if (p.type === "wide") {
+              g.wideUntil = now + 9000;
+              setActiveEffect("↔ ¡Barra Ancha por 9s!");
+            } else {
+              g.slowUntil = now + 8000;
+              setActiveEffect("🐢 ¡Bola Lenta por 8s!");
+            }
+            return false;
+          }
+          return p.y < H + 20;
+        });
 
-          if (b.hitsLeft <= 0) {
-            b.alive = false;
-            setScore((s) => s + (b.isSpecial ? 200 : 100));
-            setUnlockedTruths((prev) => [{ myth: b.myth, truth: b.truth }, ...prev]);
+        // Actualizar bolas
+        const remainingBalls: Ball[] = [];
+        for (const ball of g.balls) {
+          ball.x += ball.vx * slowFactor * dt;
+          ball.y += ball.vy * slowFactor * dt;
 
-            // Special Bonus: expand paddle temporarily
-            if (b.isSpecial) {
-              sound.playPowerup();
-              state.paddleW = 135;
-              setTimeout(() => {
-                stateRef.current.paddleW = 105;
-              }, 6000);
+          // Paredes
+          if (ball.x - ball.r < 0) {
+            ball.x = ball.r;
+            ball.vx = Math.abs(ball.vx);
+            playBounce(1.1);
+          } else if (ball.x + ball.r > W) {
+            ball.x = W - ball.r;
+            ball.vx = -Math.abs(ball.vx);
+            playBounce(1.1);
+          }
+          if (ball.y - ball.r < 0) {
+            ball.y = ball.r;
+            ball.vy = Math.abs(ball.vy);
+            playBounce(1.2);
+          }
+
+          // Barra
+          if (
+            ball.vy > 0 &&
+            ball.y + ball.r >= H - 24 &&
+            ball.y - ball.r <= H - 10 &&
+            ball.x >= g.paddleX - 4 &&
+            ball.x <= g.paddleX + pw + 4
+          ) {
+            const hitOffset = (ball.x - (g.paddleX + pw / 2)) / (pw / 2);
+            const speed = Math.hypot(ball.vx, ball.vy);
+            ball.vx = hitOffset * speed * 0.85;
+            ball.vy = -Math.max(140, Math.sqrt(Math.max(4000, speed * speed - ball.vx * ball.vx)));
+            ball.y = H - 24 - ball.r;
+            playBounce(1.0);
+          }
+
+          // Ladrillos
+          for (const b of g.bricks) {
+            if (!b.alive) continue;
+            if (
+              ball.x + ball.r > b.x &&
+              ball.x - ball.r < b.x + b.w &&
+              ball.y + ball.r > b.y &&
+              ball.y - ball.r < b.y + b.h
+            ) {
+              ball.vy = -ball.vy;
+              b.hitsLeft -= 1;
+              spawnParticles(b.x + b.w / 2, b.y + b.h / 2, b.color);
+
+              if (b.hitsLeft <= 0) {
+                b.alive = false;
+                playBrickHit();
+                g.combo += 1;
+                g.score += 100 + Math.min(g.combo * 20, 100);
+                setCombo(g.combo);
+                setScore(g.score);
+                setUnlockedTruths((prev) => [{ myth: b.myth, truth: b.truth }, ...prev]);
+
+                // Probabilidad de Power-Up
+                if (Math.random() < 0.45) {
+                  const roll = Math.random();
+                  const pType: PowerUp["type"] = roll < 0.35 ? "multi" : roll < 0.7 ? "wide" : "slow";
+                  const pLabel = pType === "multi" ? "2x" : pType === "wide" ? "↔" : "🐢";
+                  g.powerUps.push({ x: b.x + b.w / 2, y: b.y + b.h, vy: 115, type: pType, label: pLabel });
+                }
+              } else {
+                playBounce(1.3);
+              }
+              break;
             }
           }
+
+          if (ball.y - ball.r <= H) {
+            remainingBalls.push(ball);
+          }
         }
-      });
 
-      state.animationFrameId = requestAnimationFrame(loop);
+        g.balls = remainingBalls;
+
+        // Perdió todas las bolas
+        if (g.balls.length === 0) {
+          playAlert();
+          g.lives -= 1;
+          g.combo = 0;
+          setLives(g.lives);
+          setCombo(0);
+
+          if (g.lives <= 0) {
+            g.finished = true;
+            setIsPlaying(false);
+            const brokenCount = g.bricks.filter((b) => !b.alive).length;
+            const stars: 0 | 1 | 2 | 3 = brokenCount >= Math.ceil(brickCount / 2) ? 1 : 0;
+            const brokenList = g.bricks
+              .filter((b) => !b.alive)
+              .map((b) => ({ myth: b.myth, truth: b.truth }));
+            const listToReview =
+              brokenList.length > 0
+                ? brokenList
+                : g.bricks.slice(0, 4).map((b) => ({ myth: b.myth, truth: b.truth }));
+
+            const reviewElement = (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 border-b border-teal-200 pb-2">
+                  <span className="text-xl">💡</span>
+                  <div>
+                    <h4 className="font-black text-sm text-teal-950">
+                      Mitos y Verdades para Leer con Calma
+                    </h4>
+                    <p className="text-xs text-slate-600">
+                      Aquí puedes reflexionar sobre lo aprendido sin prisa:
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {listToReview.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-teal-50/70 border border-teal-200 rounded-2xl p-3"
+                    >
+                      <p className="text-xs font-black text-rose-600 line-through">
+                        Mito: &ldquo;{item.myth}&rdquo;
+                      </p>
+                      <p className="text-xs font-semibold text-teal-950 mt-1 leading-relaxed">
+                        ✓ Realidad: {item.truth}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+
+            onComplete(
+              stars,
+              g.score,
+              brickCount * 140,
+              `Derribaste ${brokenCount} de ${brickCount} mitos machistas antes de quedarte sin vidas.`,
+              reviewElement
+            );
+          } else {
+            g.balls = [{ x: g.paddleX + pw / 2, y: H - 40, vx: baseSpeed * 0.5, vy: -baseSpeed * 0.85, r: 8 }];
+          }
+        }
+
+        // Victoria al romper todos
+        if (g.bricks.every((b) => !b.alive) && !g.finished) {
+          g.finished = true;
+          setIsPlaying(false);
+          playCorrect();
+          const stars: 0 | 1 | 2 | 3 = g.lives === 3 ? 3 : g.lives === 2 ? 2 : 1;
+          const reviewElement = (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 border-b border-teal-200 pb-2">
+                <span className="text-xl">🎉</span>
+                <div>
+                  <h4 className="font-black text-sm text-teal-950">
+                    ¡Todos los Mitos Desmentidos en esta Misión!
+                  </h4>
+                  <p className="text-xs text-slate-600">
+                    Léelos con calma a tu propio ritmo:
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                {g.bricks.map((b, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-teal-50/70 border border-teal-200 rounded-2xl p-3"
+                  >
+                    <p className="text-xs font-black text-rose-600 line-through">
+                      Mito: &ldquo;{b.myth}&rdquo;
+                    </p>
+                    <p className="text-xs font-semibold text-teal-950 mt-1 leading-relaxed">
+                      ✓ Realidad: {b.truth}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
+          onComplete(
+            stars,
+            g.score + g.lives * 50,
+            brickCount * 140 + 150,
+            `¡Demoliste los ${brickCount} mitos y estereotipos conservando ${g.lives} vidas!`,
+            reviewElement
+          );
+        }
+      }
+
+      drawFrame();
+      rafId = requestAnimationFrame(tick);
     };
 
-    stateRef.current.animationFrameId = requestAnimationFrame(loop);
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [isPlaying, isPaused, brickCount, baseSpeed, onComplete, playAlert, playBounce, playBrickHit, playCorrect, playPowerup]);
 
-    return () => {
-      isRunning = false;
-      cancelAnimationFrame(stateRef.current.animationFrameId);
-    };
-  }, [gameState, getBaseSpeed, level, startCountdown]);
-
-  // Mouse / Touch handlers for paddle
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const movePaddleToClientX = (clientX: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const newX = mouseX - stateRef.current.paddleW / 2;
-    stateRef.current.paddleTargetX = Math.max(0, Math.min(canvas.width - stateRef.current.paddleW, newX));
-  };
-
-  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !e.touches[0]) return;
-    const rect = canvas.getBoundingClientRect();
-    const touchX = e.touches[0].clientX - rect.left;
-    const newX = touchX - stateRef.current.paddleW / 2;
-    stateRef.current.paddleTargetX = Math.max(0, Math.min(canvas.width - stateRef.current.paddleW, newX));
-  };
-
-  const movePaddleStep = (delta: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const newX = stateRef.current.paddleX + delta;
-    stateRef.current.paddleTargetX = Math.max(0, Math.min(canvas.width - stateRef.current.paddleW, newX));
+    const scaleX = canvas.width / rect.width;
+    const x = (clientX - rect.left) * scaleX - gameRef.current.paddleW / 2;
+    gameRef.current.paddleX = Math.max(4, Math.min(canvas.width - gameRef.current.paddleW - 4, x));
   };
 
   return (
-    <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border-2 border-indigo-100 max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <GameHeader
-        title="🧱 El Muro de los Mitos"
-        badge="Erradicación de micromachismos y prejuicios de género (Meta ODS 5.1)"
-        levelBadge="Nivel Intermedio (10 a 13 años)"
-        levelColor="rose"
-        odsTarget="ODS 5.1"
-        score={score}
-        stars={lives}
-        maxStars={3}
-        onOpenHelp={() => setIsHelpOpen(true)}
-        onOpenInstructions={() => setIsInstructionsOpen(true)}
-        onRestart={startNewGame}
-        onPause={() => setGameState(gameState === "playing" ? "paused" : "playing")}
-        isPaused={gameState === "paused"}
-      />
-
-      {/* Control Bar: Speed options & Lives */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-100 p-2 rounded-2xl">
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs font-black text-slate-600 flex items-center gap-1 pl-1">
-            <Gauge className="w-3.5 h-3.5" /> Velocidad:
+    <div className="bg-white rounded-4xl border-2 border-blue-200 shadow-xl p-5 sm:p-7 space-y-5">
+      {/* HUD */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="px-3 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-black inline-flex items-center gap-1">
+            <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" /> Vidas: {lives}
           </span>
-          <button
-            onClick={() => {
-              sound.playClick();
-              setSpeedSetting("tranquila");
-            }}
-            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
-              speedSetting === "tranquila"
-                ? "bg-white text-emerald-800 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            Tranquila (Precisa)
-          </button>
-          <button
-            onClick={() => {
-              sound.playClick();
-              setSpeedSetting("normal");
-            }}
-            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
-              speedSetting === "normal"
-                ? "bg-white text-indigo-800 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            Normal
-          </button>
-          <button
-            onClick={() => {
-              sound.playClick();
-              setSpeedSetting("desafio");
-            }}
-            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
-              speedSetting === "desafio"
-                ? "bg-white text-rose-800 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            Desafío
-          </button>
-        </div>
-
-        {/* Lives & Phase */}
-        <div className="flex items-center gap-4 text-xs font-black px-2">
-          <div className="flex items-center gap-1 text-rose-600">
-            {[...Array(3)].map((_, i) => (
-              <Heart
-                key={i}
-                className={`w-4 h-4 ${
-                  i < lives ? "fill-rose-500 text-rose-500" : "text-slate-300"
-                }`}
-              />
-            ))}
-          </div>
-          <span className="bg-white px-2.5 py-1 rounded-xl border border-slate-200 text-indigo-900">
-            Fase {level} de 2
+          <span className="px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-black">
+            Puntos: {score}
           </span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-        {/* Canvas Arcade Area */}
-        <div className="md:col-span-7 flex flex-col items-center">
-          <div className="relative rounded-3xl overflow-hidden border-4 border-slate-900 bg-slate-950 shadow-2xl w-full max-w-[480px]">
-            <canvas
-              ref={canvasRef}
-              width={480}
-              height={320}
-              onMouseMove={handleMouseMove}
-              onTouchMove={handleTouchMove}
-              className="w-full h-auto cursor-ew-resize block"
-            />
-
-            {/* Menu State Overlay */}
-            {gameState === "menu" && (
-              <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center text-white">
-                <Zap className="w-12 h-12 text-yellow-400 mb-2 animate-bounce" />
-                <h3 className="font-black text-lg">Muro de los Mitos Arcade</h3>
-                <p className="text-xs text-slate-300 mt-1 max-w-xs">
-                  Mueve la paleta inferior para rebotar la esfera contra los ladrillos de micromachismos.
-                </p>
-                <button
-                  onClick={startNewGame}
-                  className="mt-4 px-6 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-500 font-black text-xs text-white shadow-lg transition-all"
-                >
-                  ¡Iniciar Partida!
-                </button>
-              </div>
-            )}
-
-            {/* Countdown Overlay */}
-            {gameState === "countdown" && (
-              <div className="absolute inset-0 bg-slate-950/60 flex flex-col items-center justify-center text-center text-white pointer-events-none">
-                <span className="text-6xl font-black text-yellow-400 animate-ping">
-                  {countdown}
-                </span>
-                <span className="text-xs font-bold text-slate-300 mt-2">¡Prepárate!</span>
-              </div>
-            )}
-
-            {/* Paused Overlay */}
-            {gameState === "paused" && (
-              <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center text-white">
-                <Pause className="w-12 h-12 text-amber-400 mb-2" />
-                <h3 className="font-black text-lg">Juego Pausado</h3>
-                <button
-                  onClick={() => setGameState("playing")}
-                  className="mt-4 px-6 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 font-black text-xs text-white shadow-lg"
-                >
-                  Reanudar Partida
-                </button>
-              </div>
-            )}
-
-            {/* Game Over Overlay */}
-            {gameState === "gameover" && (
-              <div className="absolute inset-0 bg-rose-950/85 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center text-white">
-                <p className="text-2xl font-black text-rose-300">¡Partida terminada!</p>
-                <p className="text-xs text-slate-200 mt-1 max-w-xs">
-                  Puntaje alcanzado: {score} pts. Recuerda que siempre puedes reintentarlo y derribar todos los mitos.
-                </p>
-                <button
-                  onClick={startNewGame}
-                  className="mt-4 px-5 py-2.5 rounded-2xl bg-white text-rose-900 font-black text-xs shadow hover:bg-rose-100"
-                >
-                  Jugar otra vez
-                </button>
-              </div>
-            )}
-
-            {/* Level Won Overlay */}
-            {gameState === "levelwon" && (
-              <div className="absolute inset-0 bg-emerald-950/85 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center text-white">
-                <Award className="w-12 h-12 text-yellow-300 mb-1" />
-                <p className="text-2xl font-black text-emerald-300">¡Fase {level} Superada!</p>
-                <p className="text-xs text-emerald-100 mt-1">Has desmitificado los prejuicios de esta etapa con éxito.</p>
-                <button
-                  onClick={() => {
-                    if (level === 1) {
-                      setLevel(2);
-                      resetRound(2);
-                    } else {
-                      setIsVictoryOpen(true);
-                    }
-                  }}
-                  className="mt-4 px-5 py-2.5 rounded-2xl bg-emerald-500 font-black text-xs text-white shadow hover:bg-emerald-400"
-                >
-                  {level === 1 ? "Avanzar a Fase 2 ➡️" : "Ver Recompensas 🎉"}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Accessible Touch Controls for Tablets & Mobiles */}
-          <div className="flex items-center gap-3 mt-3 w-full max-w-[480px] justify-between">
-            <button
-              onClick={() => movePaddleStep(-40)}
-              className="flex-1 py-2.5 px-3 rounded-2xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 text-xs font-black flex items-center justify-center gap-1 transition-colors"
-              aria-label="Mover paleta a la izquierda"
-            >
-              <ChevronLeft className="w-4 h-4" /> Mover Izquierda
-            </button>
-            <button
-              onClick={() => movePaddleStep(40)}
-              className="flex-1 py-2.5 px-3 rounded-2xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 text-xs font-black flex items-center justify-center gap-1 transition-colors"
-              aria-label="Mover paleta a la derecha"
-            >
-              Mover Derecha <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Unlocked Truths Column */}
-        <div className="md:col-span-5 bg-slate-50 rounded-3xl p-5 border-2 border-slate-200/80 shadow-sm h-[380px] flex flex-col">
-          <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 mb-3 flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-rose-500" />
-              Mitos Derribados ({unlockedTruths.length}):
+          {combo > 1 && (
+            <span className="px-3 py-1.5 rounded-xl bg-amber-500 text-white text-xs font-black inline-flex items-center gap-1">
+              <Flame className="w-3.5 h-3.5" /> Racha x{combo}
             </span>
-            <span className="text-[10px] font-bold text-slate-400">En tiempo real</span>
-          </h4>
+          )}
+          {activeEffect && (
+            <span className="px-3 py-1.5 rounded-xl bg-emerald-100 text-emerald-900 text-xs font-black inline-flex items-center gap-1">
+              <Zap className="w-3.5 h-3.5" /> {activeEffect}
+            </span>
+          )}
+        </div>
 
-          <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
-            {unlockedTruths.map((item, i) => (
-              <div
-                key={i}
-                className="bg-white p-3 rounded-2xl border-l-4 border-l-rose-500 border border-slate-200 text-xs shadow-xs animate-fadeIn"
-              >
-                <span className="text-rose-700 font-black line-through block text-[11px]">
-                  Mito: &ldquo;{item.myth}&rdquo;
-                </span>
-                <p className="text-slate-800 font-semibold mt-1 leading-snug">
-                  💡 Realidad: {item.truth}
-                </p>
-              </div>
-            ))}
-
-            {unlockedTruths.length === 0 && (
-              <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 p-4">
-                <p className="text-xs italic leading-relaxed">
-                  Rompe ladrillos para desmitificar estereotipos de género y desbloquear verdades formativas de derechos humanos.
-                </p>
-              </div>
-            )}
-          </div>
+        <div className="flex items-center gap-2">
+          {!isPlaying ? (
+            <Button3D
+              variant="intermedio"
+              size="sm"
+              onClick={() => {
+                playClick();
+                if (gameRef.current.finished) buildLevel();
+                setIsPlaying(true);
+                setIsPaused(false);
+              }}
+              icon={<Play className="w-4 h-4 fill-current" />}
+            >
+              Iniciar Arcade
+            </Button3D>
+          ) : (
+            <Button3D
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                playClick();
+                setIsPaused((p) => !p);
+              }}
+              icon={<Pause className="w-4 h-4" />}
+            >
+              {isPaused ? "Reanudar" : "Pausa (P)"}
+            </Button3D>
+          )}
+          <button
+            onClick={() => {
+              playClick();
+              setIsPlaying(false);
+              buildLevel();
+            }}
+            className="min-h-[44px] px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 inline-flex items-center gap-1"
+          >
+            <RotateCcw className="w-4 h-4" /> Reiniciar
+          </button>
         </div>
       </div>
 
-      {/* Modals */}
-      <InstructionsModal
-        isOpen={isInstructionsOpen}
-        onClose={() => setIsInstructionsOpen(false)}
-        title="Instrucciones: El Muro de los Mitos"
-        objective="Destruir los bloques de estereotipos machistas y desbloquear reflexiones sobre equidad, libertad y respeto."
-        rules={[
-          "Mueve la barra inferior deslizando el mouse, tocando la pantalla o usando los botones de flecha.",
-          "Haz rebotar la esfera para impactar los ladrillos.",
-          "Algunos bloques requieren dos impactos y los bloques con estrella dorada otorgan bonificaciones.",
-          "Elige la velocidad que prefieras (Tranquila, Normal o Desafío) para jugar a tu propio ritmo."
-        ]}
-        tips={[
-          "El punto de contacto sobre la barra determina la dirección del rebote.",
-          "Cuentas con 3 vidas para completar ambas fases."
-        ]}
-      />
+      {/* Canvas + Tarjeta lateral de verdades */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_0.9fr] gap-5 items-start">
+        <div className="space-y-3">
+          <canvas
+            ref={canvasRef}
+            width={480}
+            height={340}
+            onMouseMove={(e) => isPlaying && !isPaused && movePaddleToClientX(e.clientX)}
+            onTouchMove={(e) => {
+              if (isPlaying && !isPaused && e.touches[0]) {
+                movePaddleToClientX(e.touches[0].clientX);
+              }
+            }}
+            className="w-full rounded-3xl border-4 border-slate-800 shadow-lg bg-slate-900 cursor-ew-resize"
+            aria-label="Tablero arcade El Muro de los Mitos"
+          />
 
-      <VictoryModal
-        isOpen={isVictoryOpen}
-        title="¡Muro de Mitos Totalmente Derribado!"
-        score={score}
-        stars={lives}
-        maxStars={3}
-        takeaway="Has demostrado destreza y desarticulado prejuicios sobre la expresión de emociones, las profesiones y los roles sociales."
-        summaryPoints={[
-          "Completaste las dos fases del muro de estereotipos.",
-          "Desbloqueaste mensajes de respeto e igualdad de oportunidades.",
-          "Reconociste que el talento y las emociones no tienen género."
-        ]}
-        onRestart={startNewGame}
-      />
+          {/* Controles táctiles accesibles */}
+          <div className="flex items-center justify-center gap-4">
+            <button
+              onClick={() => {
+                gameRef.current.paddleX = Math.max(4, gameRef.current.paddleX - 42);
+              }}
+              className="min-h-[48px] flex-1 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-black text-xs inline-flex items-center justify-center gap-1 border border-slate-300"
+              aria-label="Mover barra a la izquierda"
+            >
+              <ChevronLeft className="w-5 h-5" /> Izquierda (←)
+            </button>
+            <button
+              onClick={() => {
+                gameRef.current.paddleX = Math.min(
+                  480 - gameRef.current.paddleW - 4,
+                  gameRef.current.paddleX + 42
+                );
+              }}
+              className="min-h-[48px] flex-1 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-black text-xs inline-flex items-center justify-center gap-1 border border-slate-300"
+              aria-label="Mover barra a la derecha"
+            >
+              Derecha (→) <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
 
-      <PauseModal
-        isOpen={gameState === "paused"}
-        onResume={() => setGameState("playing")}
-        onRestart={startNewGame}
-        onOpenHelp={() => setIsHelpOpen(true)}
-      />
-
-      <EmergencyHelpModal
-        isOpen={isHelpOpen}
-        onClose={() => setIsHelpOpen(false)}
-      />
+        {/* Tarjeta lateral que revela verdades al romper mitos */}
+        <aside
+          aria-label="Mensajes positivos desbloqueados"
+          className="rounded-3xl border-2 border-teal-200 bg-teal-50/50 p-4 space-y-3 max-h-[395px] overflow-y-auto"
+        >
+          <h3 className="font-black text-sm text-teal-950 flex items-center gap-1.5">
+            💡 Verdades Desbloqueadas ({unlockedTruths.length}/{brickCount})
+          </h3>
+          {unlockedTruths.length === 0 ? (
+            <p className="text-xs text-slate-600 leading-relaxed bg-white p-3.5 rounded-2xl border border-teal-100">
+              Presiona <strong>Iniciar Arcade</strong> y rompe el primer ladrillo para revelar por qué ese mito es falso.
+            </p>
+          ) : (
+            <div className="space-y-2.5">
+              {unlockedTruths.map((item, i) => (
+                <div
+                  key={i}
+                  className="bg-white p-3 rounded-2xl border border-teal-200 shadow-2xs animate-scaleUp"
+                >
+                  <p className="text-[11px] font-black text-rose-600 line-through">
+                    Mito: &ldquo;{item.myth}&rdquo;
+                  </p>
+                  <p className="text-xs font-semibold text-slate-800 mt-1 leading-relaxed">
+                    ✓ {item.truth}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </aside>
+      </div>
     </div>
+  );
+}
+
+export default function MuroDeLosMitos({ onHome, onNextGame }: GameProps) {
+  return (
+    <GameShell
+      gameId="muro"
+      tutorialSteps={MURO_TUTORIAL}
+      difficulties={[
+        { id: "facil", label: "Nivel 1 · 6 Mitos", subtitle: "Velocidad tranquila y 1 golpe por bloque", emoji: "🌱" },
+        { id: "normal", label: "Nivel 2 · 9 Mitos", subtitle: "Bloques resistentes y power-ups", emoji: "⚡" },
+        { id: "reto", label: "Nivel 3 · Fortaleza 12 Mitos", subtitle: "Patrón escalonado y velocidad arcade", emoji: "🧱" },
+      ]}
+      onHome={onHome}
+      onNextGame={onNextGame}
+    >
+      {({ difficulty, finishGame }) => (
+        <MuroGameplay difficulty={difficulty} onComplete={finishGame} />
+      )}
+    </GameShell>
   );
 }

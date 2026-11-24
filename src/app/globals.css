@@ -2,55 +2,409 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===================================================
+   DESIGN TOKENS — ODS 5 Plataforma Educativa Morelia
+   =================================================== */
 :root {
+  /* Base */
   --background: #f8fafc;
   --foreground: #0f172a;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  /* Tipografía */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
+
+  /* Nivel Infantil */
+  --infantil-primary: #22c55e;
+  --infantil-secondary: #eab308;
+  --infantil-accent: #ef4444;
+  --infantil-bg: #f0fdf4;
+  --infantil-gradient: linear-gradient(135deg, #dcfce7 0%, #fef9c3 50%, #fee2e2 100%);
+
+  /* Nivel Intermedio */
+  --intermedio-primary: #3b82f6;
+  --intermedio-secondary: #14b8a6;
+  --intermedio-accent: #f97316;
+  --intermedio-bg: #eff6ff;
+  --intermedio-gradient: linear-gradient(135deg, #dbeafe 0%, #ccfbf1 50%, #fff7ed 100%);
+
+  /* Nivel Juvenil */
+  --juvenil-primary: #8b5cf6;
+  --juvenil-secondary: #d946ef;
+  --juvenil-accent: #1e1b4b;
+  --juvenil-bg: #f5f3ff;
+  --juvenil-gradient: linear-gradient(135deg, #ede9fe 0%, #fae8ff 50%, #1e1b4b22 100%);
+
+  /* Semáforo */
+  --semaforo-verde: #16a34a;
+  --semaforo-amarillo: #ca8a04;
+  --semaforo-rojo: #dc2626;
+
+  /* Efectos */
+  --shadow-game: 0 4px 0 0 rgba(0,0,0,0.15), 0 8px 24px rgba(0,0,0,0.12);
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --radius-game: 1.5rem;
+  --radius-btn: 0.875rem;
+}
+
+/* ===================================================
+   MODO ALTO CONTRASTE (WCAG 2.1 AA / AAA)
+   =================================================== */
+.high-contrast {
+  --background: #000000;
+  --foreground: #ffffff;
+  --surface: #0a0a0a;
+  --surface-2: #171717;
+  --border: #ffffff;
+  --border-strong: #fde047;
+  --text-primary: #ffffff;
+  --text-secondary: #f1f5f9;
+  --text-tertiary: #fde047;
+  color-scheme: dark;
+}
+
+.high-contrast body,
+.high-contrast .pattern-mich,
+.high-contrast .min-h-screen {
+  background-color: #000000 !important;
+  background-image: none !important;
+  color: #ffffff !important;
+}
+
+/* Superficies y gradientes claros transformados a alto contraste oscuro */
+.high-contrast header,
+.high-contrast footer,
+.high-contrast section,
+.high-contrast article,
+.high-contrast aside,
+.high-contrast .game-card,
+.high-contrast [class*="bg-white"],
+.high-contrast .bg-slate-50,
+.high-contrast .bg-slate-100,
+.high-contrast [class*="bg-slate-50"],
+.high-contrast [class*="bg-emerald-50"],
+.high-contrast [class*="bg-emerald-100"],
+.high-contrast [class*="bg-blue-50"],
+.high-contrast [class*="bg-blue-100"],
+.high-contrast [class*="bg-indigo-50"],
+.high-contrast [class*="bg-indigo-100"],
+.high-contrast [class*="bg-violet-50"],
+.high-contrast [class*="bg-violet-100"],
+.high-contrast [class*="bg-amber-50"],
+.high-contrast [class*="bg-amber-100"],
+.high-contrast [class*="bg-yellow-50"],
+.high-contrast [class*="bg-rose-50"],
+.high-contrast [class*="bg-rose-100"],
+.high-contrast [class*="bg-pink-50"],
+.high-contrast [class*="bg-teal-50"],
+.high-contrast [class*="bg-cyan-50"],
+.high-contrast [class*="bg-purple-50"],
+.high-contrast [class*="bg-purple-100"],
+.high-contrast [class*="bg-gradient-to"] {
+  background-color: #0a0a0a !important;
+  background-image: none !important;
+  color: #ffffff !important;
+}
+
+/* Mantener botones de acción primarios muy visibles en alto contraste */
+.high-contrast button.bg-rose-600,
+.high-contrast .bg-rose-600 {
+  background-color: #991b1b !important;
+  color: #ffffff !important;
+  border-color: #fde047 !important;
+}
+
+.high-contrast button.bg-indigo-600,
+.high-contrast a.bg-indigo-600,
+.high-contrast button.bg-violet-700 {
+  background-color: #1e1b4b !important;
+  color: #fde047 !important;
+  border: 2px solid #fde047 !important;
+}
+
+.high-contrast .btn-3d {
+  background-color: #111827 !important;
+  background-image: none !important;
+  color: #fde047 !important;
+  border: 2px solid #ffffff !important;
+}
+
+/* Bordes nítidos en alto contraste */
+.high-contrast [class*="border-slate"],
+.high-contrast [class*="border-emerald"],
+.high-contrast [class*="border-blue"],
+.high-contrast [class*="border-indigo"],
+.high-contrast [class*="border-violet"],
+.high-contrast [class*="border-amber"],
+.high-contrast [class*="border-yellow"],
+.high-contrast [class*="border-rose"],
+.high-contrast [class*="border-pink"],
+.high-contrast [class*="border-teal"],
+.high-contrast [class*="border-cyan"],
+.high-contrast [class*="border-white"] {
+  border-color: #ffffff !important;
+}
+
+/* Textos de alto contraste (>= 7:1 sobre fondo negro/oscuro) */
+.high-contrast [class*="text-slate-"],
+.high-contrast [class*="text-gray-"],
+.high-contrast [class*="text-indigo-"],
+.high-contrast [class*="text-violet-"],
+.high-contrast [class*="text-blue-"],
+.high-contrast [class*="text-teal-"],
+.high-contrast [class*="text-cyan-"] {
+  color: #ffffff !important;
+}
+
+.high-contrast [class*="text-emerald-"] {
+  color: #6ee7b7 !important;
+}
+
+.high-contrast [class*="text-amber-"],
+.high-contrast [class*="text-yellow-"] {
+  color: #fde047 !important;
+}
+
+.high-contrast [class*="text-rose-"],
+.high-contrast [class*="text-pink-"] {
+  color: #fda4af !important;
+}
+
+.high-contrast a,
+.high-contrast .underline {
+  color: #fde047 !important;
+}
+
+/* Controles e inputs */
+.high-contrast input,
+.high-contrast select,
+.high-contrast textarea {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border: 2px solid #fde047 !important;
+}
+
+.high-contrast [role="progressbar"] {
+  background-color: #171717 !important;
+  border: 2px solid #ffffff !important;
+}
+
+.high-contrast [role="progressbar"] > div {
+  background-color: #fde047 !important;
+  background-image: none !important;
+}
+
+.high-contrast .skip-link:focus {
+  background-color: #fde047 !important;
+  color: #000000 !important;
+  border: 3px solid #ffffff !important;
+}
+
+/* ===================================================
+   TIPOGRAFÍA BASE
+   =================================================== */
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background-color: #f8fafc;
-  color: #0f172a;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body, system-ui), -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   margin: 0;
   padding: 0;
   overflow-x: hidden;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+h1, h2, h3, h4, h5, h6,
+.font-display {
+  font-family: var(--font-display, system-ui), -apple-system, BlinkMacSystemFont,
+    "Segoe UI Rounded", "Nunito", Roboto, sans-serif;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+/* ===================================================
+   MODO TEXTO GRANDE
+   =================================================== */
+.large-text {
+  font-size: 1.125rem;
+}
+.large-text h1 { font-size: 2.5rem; }
+.large-text h2 { font-size: 2rem; }
+.large-text h3 { font-size: 1.5rem; }
+.large-text p, .large-text span, .large-text button { font-size: 1.1rem; }
+
+/* ===================================================
+   COMPONENTES DE UTILIDAD
+   =================================================== */
+
+/* Botón 3D estilo game */
+.btn-3d {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.btn-3d:hover {
+  transform: translateY(-2px);
+}
+.btn-3d:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.2) !important;
+}
+
+/* Tarjeta de juego */
+.game-card {
+  background: var(--surface);
+  border-radius: var(--radius-game);
+  box-shadow: var(--shadow-card);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.game-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.06);
+}
+
+/* Patrón decorativo michoacano */
+.pattern-mich {
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(34,197,94,0.06) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(139,92,246,0.06) 0%, transparent 50%),
+    url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2322c55e' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Spinner de carga */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(139,92,246,0.15);
+  border-left-color: #8b5cf6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* ===================================================
+   ANIMACIONES KEYFRAMES
+   =================================================== */
+
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes scaleUp {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
 }
 
-.animate-fadeIn {
-  animation: fadeIn 0.25s ease-out forwards;
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.animate-scaleUp {
-  animation: scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-16px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-/* WCAG 2.1 Accessible Focus Visible */
+@keyframes bounceGentle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-10px) rotate(1deg); }
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-10deg); }
+  75% { transform: rotate(10deg); }
+}
+
+@keyframes shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+  40%, 60% { transform: translate3d(4px, 0, 0); }
+}
+
+@keyframes pop {
+  0% { transform: scale(0.5); opacity: 0; }
+  70% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes celebration {
+  0% { transform: scale(0.8) rotate(-5deg); opacity: 0; }
+  50% { transform: scale(1.15) rotate(3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+@keyframes starAppear {
+  0% { transform: scale(0) rotate(-30deg); opacity: 0; }
+  60% { transform: scale(1.3) rotate(5deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes pathDash {
+  to { stroke-dashoffset: 0; }
+}
+
+/* Clases de animación */
+.animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
+.animate-scaleUp { animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-slideUp { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-slideDown { animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-bounceGentle { animation: bounceGentle 2s ease-in-out infinite; }
+.animate-float { animation: float 3s ease-in-out infinite; }
+.animate-wiggle { animation: wiggle 0.5s ease-in-out; }
+.animate-shake { animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+.animate-pop { animation: pop 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-celebration { animation: celebration 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+/* Gradiente animado para fondos */
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradientShift 8s ease infinite;
+}
+
+/* ===================================================
+   WCAG 2.1 — FOCO ACCESIBLE
+   =================================================== */
 *:focus-visible {
   outline: 3px solid #6366f1;
-  outline-offset: 2px;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.high-contrast *:focus-visible {
+  outline: 3px solid #ffff00;
+  outline-offset: 3px;
 }
 
-/* Respect user's motion preference */
+/* ===================================================
+   PREFERS-REDUCED-MOTION
+   =================================================== */
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,
@@ -60,4 +414,56 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+.reduce-motion *,
+.reduce-motion ::before,
+.reduce-motion ::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* ===================================================
+   FLIP 3D PARA MEMORAMA
+   =================================================== */
+.perspective-1000 { perspective: 1000px; }
+.transform-style-3d { transform-style: preserve-3d; }
+.backface-hidden { backface-visibility: hidden; }
+.rotate-y-180 { transform: rotateY(180deg); }
+
+/* ===================================================
+   SCROLLBAR ESTILIZADO
+   =================================================== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ===================================================
+   SELECCIÓN DE TEXTO
+   =================================================== */
+::selection {
+  background-color: #6366f1;
+  color: white;
+}
+
+/* ===================================================
+   CANVAS GAMES — CURSOR
+   =================================================== */
+canvas {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }

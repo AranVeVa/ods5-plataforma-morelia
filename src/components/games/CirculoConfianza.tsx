@@ -1,552 +1,315 @@
 "use client";
 
 import React, { useState } from "react";
+import { AlertTriangle, LogOut, RotateCcw, HeartHandshake, ArrowRight, ShieldCheck } from "lucide-react";
+import GameShell, { DifficultyLevel } from "@/components/common/GameShell";
+import Button3D from "@/components/common/Button3D";
+import DirectorioApoyo from "@/components/DirectorioApoyo";
 import {
-  Users2,
-  ArrowRight,
-  ShieldCheck,
-  PhoneCall,
-  MapPin,
-  Clock,
-  RotateCcw,
-  Copy,
-  Check,
-  Sparkles,
-  BookOpen,
-  HelpCircle,
-  AlertTriangle,
-  HeartHandshake,
-  ShieldAlert
-} from "lucide-react";
-import confetti from "canvas-confetti";
-import GameHeader from "@/components/common/GameHeader";
-import InstructionsModal from "@/components/common/InstructionsModal";
-import VictoryModal from "@/components/common/VictoryModal";
-import EmergencyHelpModal from "@/components/common/EmergencyHelpModal";
-import { MORELIA_RESOURCES, EmergencyContact } from "@/data/educational-content";
-import { sound } from "@/utils/audio";
+  STORY_SCENARIOS,
+  StoryScenarioKey,
+  createInitialStoryState,
+  transitionStoryState,
+  CIRCULO_TUTORIAL,
+} from "@/content/game8-circulo";
+import { useSound } from "@/hooks/useSound";
 
-interface Choice {
-  text: string;
-  nextNodeId: string;
-  isProtective: boolean;
-  consequence: string;
+interface GameProps {
+  onHome?: () => void;
+  onNextGame?: () => void;
 }
 
-interface StoryNode {
-  id: string;
-  context: string;
-  title: string;
-  dialogue: string;
-  characterMood: "alarm" | "concerned" | "resolute" | "safe";
-  choices: Choice[];
-}
-
-type ScenarioKey = "digital" | "noviazgo" | "escolar";
-
-const SCENARIOS: Record<ScenarioKey, { title: string; subtitle: string; startNode: string; nodes: Record<string, StoryNode> }> = {
-  digital: {
-    title: "Caso 1: Violencia Digital y Ley Olimpia",
-    subtitle: "Difusión de fotografías íntimas sin consentimiento en grupos de chat",
-    startNode: "dig_start",
-    nodes: {
-      dig_start: {
-        id: "dig_start",
-        context: "Preparatoria en Morelia • Grupo de Mensajería",
-        title: "Una imagen privada compartida en el chat escolar",
-        dialogue: "En un grupo de mensajería estudiantil de tu preparatoria, alguien comparte una fotografía íntima de una compañera de clase acompañada de comentarios denigrantes y peticiones para reenviarla a otros salones.",
-        characterMood: "concerned",
-        choices: [
-          {
-            text: "Exigir en el grupo frenar la difusión, resguardar capturas de pantalla como prueba y acompañar a la compañera con una orientadora escolar o la Policía Cibernética.",
-            nextNodeId: "dig_support",
-            isProtective: true,
-            consequence: "Cortas la cadena de complicidad machista, proteges la intimidad de tu compañera y activas los protocolos legales de la Ley Olimpia."
-          },
-          {
-            text: "Reenviar la foto a otros contactos para 'preguntar si es verdad' o guardar silencio por temor a burlas.",
-            nextNodeId: "dig_passive",
-            isProtective: false,
-            consequence: "La difusión no consentida de material íntimo es un delito penal en Michoacán con penas de 4 a 8 años de prisión."
-          }
-        ]
-      },
-      dig_support: {
-        id: "dig_support",
-        context: "Acompañamiento Ciudadano Responsable",
-        title: "Activando la Red de Valentía y Solidaridad",
-        dialogue: "Tu compañera se siente en crisis emocional y con miedo al juicio social. Agradece profundamente que no hayas sido cómplice. Juntas analizan cómo proceder con seguridad y confidencialidad.",
-        characterMood: "resolute",
-        choices: [
-          {
-            text: "Contactar a la Policía Cibernética de Michoacán y al Centro de Justicia para las Mujeres de Morelia para recibir asesoría gratuita y solicitar la baja formal del contenido.",
-            nextNodeId: "dig_safe",
-            isProtective: true,
-            consequence: "Se ordena la eliminación inmediata de los enlaces digitales y se brinda contención psicológica profesional gratuita."
-          },
-          {
-            text: "Buscar confrontar a golpes al responsable a la salida del plantel educativo.",
-            nextNodeId: "dig_violence",
-            isProtective: false,
-            consequence: "La confrontación física escala la violencia, pone en riesgo tu integridad y desvía la atención del delito digital cometido."
-          }
-        ]
-      },
-      dig_passive: {
-        id: "dig_passive",
-        context: "Consecuencias de la Omisión",
-        title: "Impacto del Ciberacoso y Responsabilidad Ética",
-        dialogue: "Al no detenerse la difusión, la compañera sufre ataques de pánico y decide dejar de asistir a clases. Reconoces el grave daño que provoca el silencio de los testigos.",
-        characterMood: "alarm",
-        choices: [
-          {
-            text: "Rectificar el actuar: Borrar los archivos, denunciar las cuentas que difunden y acercarte a ofrecer apoyo sincero canalizándola a las instituciones de Morelia.",
-            nextNodeId: "dig_support",
-            isProtective: true,
-            consequence: "Reconocer un error a tiempo y solidarizarse activamente puede salvar una vida y reparar el tejido escolar."
-          }
-        ]
-      },
-      dig_violence: {
-        id: "dig_violence",
-        context: "Desvío del Conflicto",
-        title: "La violencia nunca resuelve la violencia",
-        dialogue: "La riña causó sanciones disciplinarias para ambas partes mientras el contenido digital continuó en línea sin resolver el fondo del problema.",
-        characterMood: "alarm",
-        choices: [
-          {
-            text: "Canalizar la denuncia por la vía institucional especializada, pacífica y legal.",
-            nextNodeId: "dig_safe",
-            isProtective: true,
-            consequence: "Se recurre a los especialistas en prevención de delitos digitales de Michoacán."
-          }
-        ]
-      },
-      dig_safe: {
-        id: "dig_safe",
-        context: "Resolución Segura y Reparadora",
-        title: "¡Actuación Ejemplar y Ciudadanía Digital Ética!",
-        dialogue: "Gracias a tu solidaridad informada, se evitó la revictimización, se retiró el material y se activó el protocolo formal en Morelia. Consulta el directorio de auxilio oficial a continuación.",
-        characterMood: "safe",
-        choices: []
-      }
-    }
-  },
-  noviazgo: {
-    title: "Caso 2: Control y Celos en el Noviazgo",
-    subtitle: "Detección de señales tempranas de violencia psicológica y control coercitivo",
-    startNode: "nov_start",
-    nodes: {
-      nov_start: {
-        id: "nov_start",
-        context: "Relaciones Afectivas en la Juventud",
-        title: "La exigencia de contraseñas y permisos",
-        dialogue: "La pareja de una amiga le exige que le entregue sus contraseñas de Instagram y WhatsApp, le reclama si habla con compañeros de clase y le pide fotos de cómo va vestida antes de salir de casa.",
-        characterMood: "concerned",
-        choices: [
-          {
-            text: "Platicar en privado con tu amiga, recordarle que el amor sano se basa en la confianza y privacidad mutua, y sugerirle revisar el Violentómetro de IMMUJERIS.",
-            nextNodeId: "nov_support",
-            isProtective: true,
-            consequence: "Visibilizas el control coercitivo a tiempo antes de que escale a violencia física, económica o patrimonial."
-          },
-          {
-            text: "Decirle que 'así son las parejas modernas' o que 'si la cela tanto es porque la ama demasiado'.",
-            nextNodeId: "nov_normalize",
-            isProtective: false,
-            consequence: "Normalizar los celos y la invasión de privacidad perpetúa relaciones tóxicas de dominación machista."
-          }
-        ]
-      },
-      nov_support: {
-        id: "nov_support",
-        context: "Establecimiento de Límites",
-        title: "Recuperando la Autonomía Personal",
-        dialogue: "Tu amiga reconoce que siente angustia constante y que ha dejado de ver a sus amistades. Decide poner un alto y solicitar orientación psicológica juvenil gratuita.",
-        characterMood: "resolute",
-        choices: [
-          {
-            text: "Acompañarla a las sesiones del Instituto de la Mujer Moreliana (IMMUJERIS) o SeiMujer para recibir contención emocional y asesoría.",
-            nextNodeId: "nov_safe",
-            isProtective: true,
-            consequence: "Aprende a identificar relaciones afectivas saludables y a construir redes de apoyo seguras."
-          }
-        ]
-      },
-      nov_normalize: {
-        id: "nov_normalize",
-        context: "Escalada del Aislamiento",
-        title: "Pérdida de Redes de Apoyo",
-        dialogue: "Con el paso de las semanas, la pareja le prohíbe tener cualquier amistad. Su rendimiento escolar cae y se siente completamente sola y deprimida.",
-        characterMood: "alarm",
-        choices: [
-          {
-            text: "Intervenir con empatía: acercarte sin juzgarla, escucharla y ofrecerle las líneas de atención psicológica de Morelia.",
-            nextNodeId: "nov_support",
-            isProtective: true,
-            consequence: "Romper el aislamiento es el paso indispensable para recuperar la tranquilidad y la seguridad."
-          }
-        ]
-      },
-      nov_safe: {
-        id: "nov_safe",
-        context: "Relaciones Libres de Violencia",
-        title: "¡Vínculos Afectivos Basados en el Respeto!",
-        dialogue: "Lograron identificar banderas rojas a tiempo. El amor sincero nunca exige sumisión, control, miedo ni renuncia a la propia libertad.",
-        characterMood: "safe",
-        choices: []
-      }
-    }
-  },
-  escolar: {
-    title: "Caso 3: Acoso en Espacio Público y Transporte",
-    subtitle: "Solidaridad activa ante tocamientos o comentarios lascivos en paradas de autobús",
-    startNode: "esc_start",
-    nodes: {
-      esc_start: {
-        id: "esc_start",
-        context: "Parada de Transporte Público en Morelia",
-        title: "Un sujeto molesta a una estudiante en la parada",
-        dialogue: "Esperando el transporte hacia la secundaria, notas que un sujeto desconocido comienza a hacer comentarios lascivos insistentes y a acercarse indebidamente a una estudiante visiblemente asustada.",
-        characterMood: "concerned",
-        choices: [
-          {
-            text: "Aplicar la técnica de intervención solidaria: acercarte fingiendo que la conoces ('¡Hola Laura, te estaba buscando!'), invitarla a caminar juntos e ingresar a un comercio 'Punto Naranja'.",
-            nextNodeId: "esc_support",
-            isProtective: true,
-            consequence: "Disuades la agresión sin confrontación violenta directa y resguardas a la estudiante en un espacio seguro capacitado."
-          },
-          {
-            text: "Quedarte mirando con indiferencia o retirarte del lugar pensando que 'no es tu problema'.",
-            nextNodeId: "esc_ignore",
-            isProtective: false,
-            consequence: "La falta de empatía ciudadana deja a la víctima en alta vulnerabilidad ante un posible delito en la vía pública."
-          }
-        ]
-      },
-      esc_support: {
-        id: "esc_support",
-        context: "Resguardo y Auxilio Inmediato",
-        title: "Protocolo Punto Naranja en Morelia",
-        dialogue: "En el establecimiento comercial activan de inmediato el protocolo: resguardan a la estudiante, contactan a sus familiares y reportan la situación a la Policía de Morelia.",
-        characterMood: "resolute",
-        choices: [
-          {
-            text: "Acompañarla tranquilamente hasta que lleguen sus familiares o el personal policial de género.",
-            nextNodeId: "esc_safe",
-            isProtective: true,
-            consequence: "Garantizas un acompañamiento solidario y seguro sin exponer a nadie a riesgos innecesarios."
-          }
-        ]
-      },
-      esc_ignore: {
-        id: "esc_ignore",
-        context: "Inseguridad Colectiva",
-        title: "El costo del silencio ciudadano",
-        dialogue: "Una vendedora cercana intervino para auxiliar a la joven, pero la indiferencia colectiva incrementa el miedo en los estudiantes que transitan a diario por esa ruta.",
-        characterMood: "alarm",
-        choices: [
-          {
-            text: "Aprender el protocolo de intervención ciudadana solidaria y comprometerte a actuar de forma segura.",
-            nextNodeId: "esc_safe",
-            isProtective: true,
-            consequence: "La seguridad comunitaria en Morelia se fortalece cuando cuidamos colectivamente a la juventud."
-          }
-        ]
-      },
-      esc_safe: {
-        id: "esc_safe",
-        context: "Comunidad Activa y Protectora",
-        title: "¡Solidaridad Ciudadana que Salva Vidas!",
-        dialogue: "Una comunidad informada, empática y valiente previene delitos y garantiza que las calles y escuelas de Morelia sean espacios libres de violencia.",
-        characterMood: "safe",
-        choices: []
-      }
-    }
-  }
-};
-
-export default function CirculoConfianza() {
-  const [scenarioKey, setScenarioKey] = useState<ScenarioKey>("digital");
-  const [currentNodeId, setCurrentNodeId] = useState<string>("dig_start");
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [isInstructionsOpen, setIsInstructionsOpen] = useState<boolean>(false);
-  const [isVictoryOpen, setIsVictoryOpen] = useState<boolean>(false);
-  const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
-
-  const scenario = SCENARIOS[scenarioKey];
-  const currentNode = scenario.nodes[currentNodeId] || scenario.nodes[scenario.startNode];
-
-  const handleScenarioChange = (key: ScenarioKey) => {
-    sound.playPowerup();
-    setScenarioKey(key);
-    setCurrentNodeId(SCENARIOS[key].startNode);
-  };
-
-  const handleChoice = (choice: Choice) => {
-    if (choice.isProtective) {
-      sound.playCorrect();
-    } else {
-      sound.playAlert();
-    }
-    setCurrentNodeId(choice.nextNodeId);
-
-    if (scenario.nodes[choice.nextNodeId]?.choices.length === 0) {
-      sound.playCelebration();
-      setIsVictoryOpen(true);
-    }
-  };
-
-  const handleCopyPhone = (id: string, phone: string) => {
-    sound.playClick();
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(phone);
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
-    }
-  };
-
-  const handleRestart = () => {
-    sound.playPowerup();
-    setCurrentNodeId(scenario.startNode);
-    setIsVictoryOpen(false);
-  };
+/** Personaje SVG expresivo con burbuja de diálogo */
+function StoryCharacterSvg({ mood }: { mood: "alarm" | "concerned" | "resolute" | "safe" }) {
+  const bg =
+    mood === "safe"
+      ? "#dcfce7"
+      : mood === "resolute"
+      ? "#ede9fe"
+      : mood === "alarm"
+      ? "#ffe4e6"
+      : "#fef3c7";
+  const shirt =
+    mood === "safe"
+      ? "#10b981"
+      : mood === "resolute"
+      ? "#7c3aed"
+      : mood === "alarm"
+      ? "#e11d48"
+      : "#f59e0b";
 
   return (
-    <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border-2 border-indigo-100 max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <GameHeader
-        title="🤝 Círculo de Confianza y Valentía"
-        badge="Prevención de violencia digital, escolar y noviazgo • AVGM Morelia"
-        levelBadge="Nivel Juvenil (14 años en adelante)"
-        levelColor="violet"
-        odsTarget="ODS 5.2"
-        score={currentNode.choices.length === 0 ? 300 : 150}
-        stars={currentNode.choices.length === 0 ? 3 : 2}
-        maxStars={3}
-        onOpenHelp={() => setIsHelpOpen(true)}
-        onOpenInstructions={() => setIsInstructionsOpen(true)}
-        onRestart={handleRestart}
-      />
+    <svg viewBox="0 0 110 110" className="w-24 h-24 shrink-0" aria-hidden="true">
+      <circle cx="55" cy="55" r="50" fill={bg} />
+      <path d="M 24 98 Q 55 72 86 98 Z" fill={shirt} />
+      <circle cx="55" cy="46" r="21" fill="#1e1b4b" />
+      <circle cx="55" cy="49" r="17" fill="#ecc8af" />
+      <circle cx="49" cy="47" r="2.2" fill="#1e293b" />
+      <circle cx="61" cy="47" r="2.2" fill="#1e293b" />
+      {mood === "safe" || mood === "resolute" ? (
+        <path d="M 49 55 Q 55 61 61 55" stroke="#7c2d12" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+      ) : (
+        <path d="M 49 58 Q 55 53 61 58" stroke="#7c2d12" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+      )}
+    </svg>
+  );
+}
 
-      {/* Scenario Selector Tabs */}
-      <div className="flex flex-wrap gap-2 bg-slate-100 p-2 rounded-2xl">
-        <button
-          onClick={() => handleScenarioChange("digital")}
-          className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all ${
-            scenarioKey === "digital"
-              ? "bg-slate-900 text-emerald-400 shadow-sm"
-              : "text-slate-600 hover:text-slate-900 bg-white/60"
-          }`}
-        >
-          📱 Caso 1: Violencia Digital (Ley Olimpia)
-        </button>
-        <button
-          onClick={() => handleScenarioChange("noviazgo")}
-          className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all ${
-            scenarioKey === "noviazgo"
-              ? "bg-slate-900 text-emerald-400 shadow-sm"
-              : "text-slate-600 hover:text-slate-900 bg-white/60"
-          }`}
-        >
-          💔 Caso 2: Control en el Noviazgo
-        </button>
-        <button
-          onClick={() => handleScenarioChange("escolar")}
-          className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all ${
-            scenarioKey === "escolar"
-              ? "bg-slate-900 text-emerald-400 shadow-sm"
-              : "text-slate-600 hover:text-slate-900 bg-white/60"
-          }`}
-        >
-          🚍 Caso 3: Acoso Callejero y Punto Naranja
-        </button>
-      </div>
+function CirculoGameplay({
+  difficulty,
+  onHome,
+  onComplete,
+}: {
+  difficulty: DifficultyLevel;
+  onHome?: () => void;
+  onComplete: (stars: 0 | 1 | 2 | 3, score: number, maxScore: number, msg: string) => void;
+}) {
+  const { playClick, playCorrect, playAlert } = useSound();
 
-      {/* Narrative Graphic Novel Stage */}
-      <div className="bg-gradient-to-b from-slate-950 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden border-2 border-slate-800 space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-950/80 px-3 py-1 rounded-lg border border-emerald-800">
-            {currentNode.context}
-          </span>
-          <span className="text-xs text-slate-400">
-            Árbol de decisiones éticas
-          </span>
+  const initialCase: StoryScenarioKey =
+    difficulty === "facil" ? "noviazgo" : difficulty === "normal" ? "digital" : "escolar";
+
+  const [acceptedWarning, setAcceptedWarning] = useState(false);
+  const [engineState, setEngineState] = useState(() => createInitialStoryState(initialCase));
+
+  const scenario = STORY_SCENARIOS[engineState.scenarioKey];
+  const node = scenario.nodes[engineState.currentNodeId] || scenario.nodes[scenario.startNode];
+
+  const handleSelectCase = (key: StoryScenarioKey) => {
+    playClick();
+    setEngineState(createInitialStoryState(key));
+  };
+
+  const handleChoice = (idx: number) => {
+    const choice = node.choices[idx];
+    if (!choice) return;
+    if (choice.isProtective) playCorrect();
+    else playAlert();
+    setEngineState((prev) => transitionStoryState(prev, idx));
+  };
+
+  const handleFinishCase = () => {
+    const stars: 0 | 1 | 2 | 3 =
+      engineState.supportMeter >= 85 ? 3 : engineState.supportMeter >= 60 ? 2 : 1;
+    onComplete(
+      stars,
+      engineState.supportMeter * 3,
+      300,
+      `Completaste "${scenario.title}" construyendo un medidor de apoyo de ${engineState.supportMeter}%. Recuerda que nunca es culpa de quien vive violencia y Morelia cuenta con redes gratuitas de auxilio.`
+    );
+  };
+
+  // Advertencia de contenido antes de comenzar
+  if (!acceptedWarning) {
+    return (
+      <div className="bg-white rounded-4xl border-2 border-violet-200 shadow-xl p-6 sm:p-8 max-w-2xl mx-auto space-y-5 animate-scaleUp">
+        <div className="flex items-start gap-3 bg-amber-50 border-2 border-amber-300 rounded-2xl p-4">
+          <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <h3 className="font-black text-amber-950 text-base">
+              Advertencia de Contenido Sensible
+            </h3>
+            <p className="text-xs sm:text-sm text-amber-900 leading-relaxed">
+              Esta historia aborda con respeto situaciones de <strong>violencia digital, control en el noviazgo y acoso escolar</strong> para aprender a pedir ayuda y proteger derechos. Nunca incluye contenido gráfico ni culpabiliza a quien sufre violencia.
+            </p>
+          </div>
         </div>
 
-        <h3 className="text-xl sm:text-2xl font-black text-slate-100 leading-tight">
-          {currentNode.title}
-        </h3>
-
-        <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-          {currentNode.dialogue}
+        <p className="text-xs text-slate-600 leading-relaxed">
+          En cualquier momento puedes usar el botón <strong>&ldquo;Salida rápida&rdquo;</strong> para regresar al mapa principal de inmediato, o abrir el botón rojo <strong>&ldquo;Necesito ayuda&rdquo;</strong> arriba.
         </p>
 
-        {/* Decisions Choices */}
-        {currentNode.choices.length > 0 ? (
-          <div className="mt-5 space-y-3 pt-2 border-t border-slate-800">
-            <span className="text-xs font-black uppercase text-slate-400 block">
-              ¿Qué decisión tomas?:
+        <div className="flex flex-wrap gap-3 justify-end">
+          {onHome && (
+            <Button3D variant="ghost" size="md" onClick={onHome} icon={<LogOut className="w-4 h-4" />}>
+              Salir al Mapa
+            </Button3D>
+          )}
+          <Button3D
+            variant="juvenil"
+            size="md"
+            onClick={() => {
+              playClick();
+              setAcceptedWarning(true);
+            }}
+          >
+            Entendido, iniciar historia →
+          </Button3D>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-4xl border-2 border-violet-200 shadow-xl p-5 sm:p-8 space-y-6">
+      {/* Barra superior: Selector de 3 casos + Medidor de apoyo + Salida Rápida */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
+        <div className="flex flex-wrap gap-2">
+          {(["digital", "noviazgo", "escolar"] as StoryScenarioKey[]).map((key, idx) => (
+            <button
+              key={key}
+              onClick={() => handleSelectCase(key)}
+              className={`min-h-[44px] px-3 py-1.5 rounded-xl text-xs font-black border transition-all ${
+                engineState.scenarioKey === key
+                  ? "bg-violet-700 text-white border-violet-800 shadow-sm"
+                  : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              Caso {idx + 1}: {key === "digital" ? "Ley Olimpia" : key === "noviazgo" ? "Noviazgo" : "Acoso"}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleSelectCase(engineState.scenarioKey)}
+            className="min-h-[44px] px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold inline-flex items-center gap-1"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Reiniciar caso
+          </button>
+          {onHome && (
+            <button
+              onClick={() => {
+                playClick();
+                onHome();
+              }}
+              className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-900 text-xs font-black border border-rose-300 inline-flex items-center gap-1.5"
+              title="Salir inmediatamente de esta historia"
+            >
+              <LogOut className="w-4 h-4" /> Salida rápida
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Medidor de apoyo */}
+      <div className="bg-violet-50/70 border border-violet-200 rounded-2xl p-3.5">
+        <div className="flex items-center justify-between text-xs font-black text-violet-950 mb-1.5">
+          <span className="flex items-center gap-1.5">
+            <HeartHandshake className="w-4 h-4 text-violet-700" />
+            Medidor de Apoyo y Red de Confianza
+          </span>
+          <span>{engineState.supportMeter}%</span>
+        </div>
+        <div className="h-3 bg-white rounded-full border border-violet-200 overflow-hidden">
+          <div
+            className={`h-full transition-all duration-500 ${
+              engineState.supportMeter >= 75
+                ? "bg-emerald-500"
+                : engineState.supportMeter >= 45
+                ? "bg-violet-600"
+                : "bg-rose-500"
+            }`}
+            style={{ width: `${engineState.supportMeter}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Escena con Personaje SVG y Burbuja de Diálogo */}
+      <div className="rounded-3xl border-2 border-slate-200 bg-gradient-to-br from-slate-50 to-violet-50/40 p-5 sm:p-6 space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-violet-100 text-violet-900">
+            {node.context}
+          </span>
+          {node.endingQuality && (
+            <span className="text-[11px] font-black uppercase px-3 py-1 rounded-full bg-emerald-100 text-emerald-900">
+              Final: {node.endingQuality}
             </span>
-            {currentNode.choices.map((choice, i) => (
+          )}
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+          <div className="flex flex-col items-center gap-1">
+            <StoryCharacterSvg mood={node.characterMood} />
+            <span className="text-[11px] font-black text-slate-600">{node.speaker}</span>
+          </div>
+
+          {/* Burbuja de diálogo */}
+          <div className="flex-1 bg-white border-2 border-violet-200 rounded-3xl p-4 sm:p-5 shadow-xs space-y-2 relative">
+            <h3 className="text-lg sm:text-xl font-display font-black text-slate-900">
+              {node.title}
+            </h3>
+            <p className="text-sm sm:text-base text-slate-700 leading-relaxed font-medium">
+              &ldquo;{node.dialogue}&rdquo;
+            </p>
+          </div>
+        </div>
+
+        {/* Consecuencia de la última decisión */}
+        {engineState.lastConsequence && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-3.5 space-y-1 animate-fadeIn">
+            <p className="text-xs font-black text-indigo-950">
+              Impacto de tu decisión: {engineState.lastConsequence}
+            </p>
+            {engineState.lastNote && (
+              <p className="text-xs text-indigo-800 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 shrink-0" />
+                {engineState.lastNote}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Opciones de decisión */}
+        {!node.isTerminal && node.choices.length > 0 ? (
+          <div className="space-y-3 pt-1">
+            <p className="text-xs font-black uppercase tracking-wider text-slate-500">
+              ¿Cómo decides actuar?
+            </p>
+            {node.choices.map((ch, idx) => (
               <button
-                key={i}
-                onClick={() => handleChoice(choice)}
-                className={`w-full text-left p-4 rounded-2xl text-xs sm:text-sm font-semibold transition-all flex items-start gap-3 border ${
-                  choice.isProtective
-                    ? "bg-slate-800/90 hover:bg-emerald-950/80 border-slate-700 hover:border-emerald-500 text-emerald-100"
-                    : "bg-slate-800/90 hover:bg-rose-950/80 border-slate-700 hover:border-rose-500 text-rose-100"
-                }`}
+                key={idx}
+                onClick={() => handleChoice(idx)}
+                className="w-full min-h-[60px] text-left p-4 rounded-2xl border-2 border-slate-200 hover:border-violet-500 bg-white hover:bg-violet-50/60 transition-all flex items-center justify-between gap-3 shadow-2xs group"
               >
-                <ArrowRight className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
-                <div className="space-y-1">
-                  <span className="font-bold text-slate-100">{choice.text}</span>
-                  <p className="text-[11px] text-slate-400 font-normal leading-snug">
-                    <strong>Consecuencia legal y emocional:</strong> {choice.consequence}
-                  </p>
-                </div>
+                <span className="text-xs sm:text-sm font-bold text-slate-800 leading-snug">
+                  {ch.text}
+                </span>
+                <ArrowRight className="w-5 h-5 text-violet-600 shrink-0 group-hover:translate-x-1 transition-transform" />
               </button>
             ))}
           </div>
         ) : (
-          <div className="mt-5 p-4 rounded-2xl bg-emerald-900/40 border border-emerald-500/60 text-emerald-200 text-xs sm:text-sm flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <ShieldCheck className="w-7 h-7 text-emerald-400 shrink-0" />
-              <div>
-                <p className="font-black">¡Caso resuelto con solidaridad y perspectiva de derechos!</p>
-                <p className="text-[11px] text-emerald-300">
-                  Has demostrado que la violencia nunca se justifica y que existen canales verificados para actuar.
-                </p>
-              </div>
+          /* Cierre con Directorio de Morelia y botón para completar */
+          <div className="space-y-5 pt-2 animate-fadeIn">
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-4">
+              <p className="text-sm font-black text-emerald-950">
+                ¡Historia completada! Puedes explorar otro caso o finalizar para ver tus estrellas.
+              </p>
+              <Button3D variant="juvenil" size="md" onClick={handleFinishCase}>
+                Finalizar Caso y Ver Estrellas ⭐
+              </Button3D>
             </div>
-            <button
-              onClick={() => setIsVictoryOpen(true)}
-              className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shrink-0 shadow"
-            >
-              Ver Conclusión
-            </button>
+
+            <div className="pt-2">
+              <h4 className="text-sm font-black text-slate-900 mb-3">
+                Directorio de Auxilio en Morelia y Nacional:
+              </h4>
+              <DirectorioApoyo compact />
+            </div>
           </div>
         )}
       </div>
-
-      {/* Directory of Emergency & Assistance in Morelia */}
-      <div className="pt-4 border-t border-slate-200 space-y-4">
-        <div>
-          <h4 className="text-lg font-black text-slate-900 flex items-center gap-2">
-            <PhoneCall className="w-5 h-5 text-indigo-600" /> Directorio de Auxilio y Denuncia en Morelia y Michoacán
-          </h4>
-          <p className="text-xs text-slate-500">
-            Instituciones gubernamentales con atención gratuita, asesoría legal y psicológica confidencial ante la Alerta de Violencia de Género (AVGM).
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {MORELIA_RESOURCES.map((res) => (
-            <div
-              key={res.id}
-              className="p-5 rounded-3xl bg-slate-50 border-2 border-slate-200/80 hover:border-indigo-300 hover:bg-white transition-all shadow-xs flex flex-col justify-between"
-            >
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-800 px-2.5 py-0.5 rounded-md inline-block">
-                  {res.scope}
-                </span>
-
-                <h5 className="font-black text-slate-900 text-sm">
-                  {res.institution}
-                </h5>
-
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  {res.description}
-                </p>
-
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {res.services.map((svc, sIdx) => (
-                    <span
-                      key={sIdx}
-                      className="text-[10px] font-bold bg-white text-slate-700 border border-slate-200 px-2 py-0.5 rounded-md"
-                    >
-                      • {svc}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-slate-200 space-y-1 text-xs">
-                <div className="flex items-center justify-between font-black text-indigo-900">
-                  <a
-                    href={`tel:${res.phone.replace(/\D/g, "")}`}
-                    className="flex items-center gap-1.5 hover:underline"
-                  >
-                    <PhoneCall className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>Tel: {res.phone}</span>
-                  </a>
-                  <button
-                    onClick={() => handleCopyPhone(res.id, res.phone)}
-                    className="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 bg-indigo-50 px-2.5 py-1 rounded-xl border border-indigo-100"
-                  >
-                    {copiedId === res.id ? (
-                      <>
-                        <Check className="w-3 h-3 text-emerald-600" /> ¡Copiado!
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3 h-3" /> Copiar
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <div className="flex items-start gap-1.5 text-slate-600 text-[11px]">
-                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                  <span>{res.address}, {res.colonia} ({res.reference})</span>
-                </div>
-
-                <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
-                  <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span>{res.hours}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Modals */}
-      <InstructionsModal
-        isOpen={isInstructionsOpen}
-        onClose={() => setIsInstructionsOpen(false)}
-        title="Instrucciones: Círculo de Confianza y Valentía"
-        objective="Explorar situaciones reales de violencia digital, noviazgo y acoso callejero, comprendiendo las consecuencias legales de cada decisión y las rutas de apoyo institucional en Morelia."
-        rules={[
-          "Selecciona el caso que deseas resolver (Violencia Digital, Celos en el Noviazgo o Acoso Callejero).",
-          "Lee la narrativa y elige la opción que priorice la protección de los derechos humanos y la empatía.",
-          "Conoce las leyes protectoras como la Ley Olimpia y el programa Punto Naranja.",
-          "Consulta el directorio oficial con teléfonos y direcciones en Morelia."
-        ]}
-        tips={[
-          "Pedir ayuda es un acto de gran valentía. La responsabilidad de una situación de violencia nunca corresponde a quien la recibe."
-        ]}
-      />
-
-      <VictoryModal
-        isOpen={isVictoryOpen}
-        title="¡Líder en Prevención y Cultura de Paz!"
-        score={300}
-        stars={3}
-        maxStars={3}
-        takeaway="Has demostrado que la solidaridad comunitaria, el conocimiento de las leyes y la denuncia oportuna son las herramientas más eficaces para frenar la violencia de género."
-        summaryPoints={[
-          "Identificaste el delito de violencia digital conforme a la Ley Olimpia.",
-          "Reconociste los signos tempranos de control coercitivo en el noviazgo.",
-          "Aprendiste a canalizar situaciones de auxilio a las instituciones oficiales de Morelia."
-        ]}
-        onRestart={handleRestart}
-      />
-
-      <EmergencyHelpModal
-        isOpen={isHelpOpen}
-        onClose={() => setIsHelpOpen(false)}
-      />
     </div>
+  );
+}
+
+export default function CirculoConfianza({ onHome, onNextGame }: GameProps) {
+  return (
+    <GameShell
+      gameId="circulo"
+      tutorialSteps={CIRCULO_TUTORIAL}
+      difficulties={[
+        { id: "facil", label: "Caso · Noviazgo Sano", subtitle: "Detectar celos, control y redes de confianza", emoji: "💬" },
+        { id: "normal", label: "Caso · Violencia Digital", subtitle: "Ley Olimpia y apoyo entre amistades", emoji: "📱" },
+        { id: "reto", label: "Caso · Rutas Seguras Morelia", subtitle: "Protocolo Punto Naranja y comunidad protectora", emoji: "🛡️" },
+      ]}
+      onHome={onHome}
+      onNextGame={onNextGame}
+    >
+      {({ difficulty, finishGame }) => (
+        <CirculoGameplay difficulty={difficulty} onHome={onHome} onComplete={finishGame} />
+      )}
+    </GameShell>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Play, RotateCcw, Volume2, VolumeX, ShieldAlert, Sparkles } from "lucide-react";
+import { Play, RotateCcw, Volume2, VolumeX, ShieldAlert } from "lucide-react";
 import { sound } from "@/utils/audio";
 
 interface PauseModalProps {
@@ -17,7 +17,16 @@ export default function PauseModal({
   onRestart,
   onOpenHelp,
 }: PauseModalProps) {
-  const [isMuted, setIsMuted] = React.useState<boolean>(sound.getMuted());
+  const [isMuted, setIsMuted] = React.useState<boolean>(() => sound.getMuted());
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onResume();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [isOpen, onResume]);
 
   if (!isOpen) return null;
 

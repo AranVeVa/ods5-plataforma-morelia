@@ -23,6 +23,15 @@ export default function InstructionsModal({
   tips,
   onStart,
 }: InstructionsModalProps) {
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleStart = () => {

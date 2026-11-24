@@ -1,681 +1,679 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
-  ShieldCheck,
-  Sparkles,
-  RefreshCw,
-  Star,
-  CheckCircle2,
-  HelpCircle,
-  Heart,
   Volume2,
-  VolumeX,
-  AlertTriangle,
-  Lightbulb,
-  Info,
+  CheckCircle2,
   ShieldAlert,
   ArrowRight,
-  Smile,
-  Meh,
-  Frown
+  Sparkles,
+  UserCheck,
 } from "lucide-react";
-import confetti from "canvas-confetti";
-import GameHeader from "@/components/common/GameHeader";
-import InstructionsModal from "@/components/common/InstructionsModal";
-import VictoryModal from "@/components/common/VictoryModal";
-import EmergencyHelpModal from "@/components/common/EmergencyHelpModal";
-import { sound } from "@/utils/audio";
+import GameShell, { DifficultyLevel } from "@/components/common/GameShell";
+import Mascot from "@/components/common/Mascot";
+import Button3D from "@/components/common/Button3D";
+import {
+  SEMAFORO_SITUATIONS,
+  BODY_ZONES_INFO,
+  TRUSTED_ADULTS_MINI_SCENE,
+  SEMAFORO_TUTORIAL,
+  TrafficColor,
+  BodyZoneInfo,
+} from "@/content/game1-semaforo";
+import { useSound } from "@/hooks/useSound";
+import { useKeyboardControls } from "@/hooks/useKeyboardControls";
 
-interface ScenarioMission {
-  id: number;
-  situation: string;
-  context: string;
-  avatarMood: "happy" | "thinking" | "alert";
-  targetZoneId: "hands" | "shoulders" | "private" | "any";
-  options: {
-    text: string;
-    trafficLight: "green" | "yellow" | "red";
-    isCorrect: boolean;
-    explanation: string;
-    protectiveRule: string;
-  }[];
+interface GameProps {
+  onHome?: () => void;
+  onNextGame?: () => void;
 }
 
-const MISSIONS: ScenarioMission[] = [
-  {
-    id: 1,
-    situation: "Un compañero de tu escuela te sonríe y alza la mano abierta para chocar las cinco porque metieron un gol en el recreo.",
-    context: "Chocar las cinco o saludar amistosamente",
-    avatarMood: "happy",
-    targetZoneId: "hands",
-    options: [
-      {
-        text: "Verde: Es una interacción respetuosa y divertida porque ambos quieren celebrar juntos.",
-        trafficLight: "green",
-        isCorrect: true,
-        explanation: "¡Exacto! Chocar las manos o saludarse es seguro y bonito cuando existe acuerdo mutuo.",
-        protectiveRule: "Recuerda: El contacto respetuoso siempre se basa en el consentimiento de ambas personas."
-      },
-      {
-        text: "Rojo: Nadie puede chocar las manos en la escuela.",
-        trafficLight: "red",
-        isCorrect: false,
-        explanation: "Chocar las manos no está prohibido. Si tú también quieres saludar o festejar, es seguro y positivo.",
-        protectiveRule: "Las manos son para jugar, crear y compartir con respeto."
-      }
-    ]
-  },
-  {
-    id: 2,
-    situation: "Un familiar o conocido insiste en que le des un abrazo muy apretado, pero tú hoy te sientes incómodo y no tienes ganas.",
-    context: "Consentimiento ante muestras de afecto",
-    avatarMood: "thinking",
-    targetZoneId: "shoulders",
-    options: [
-      {
-        text: "Verde: Tienes la obligación de abrazar a todos los adultos aunque no quieras.",
-        trafficLight: "green",
-        isCorrect: false,
-        explanation: "No tienes obligación de abrazar a nadie si no lo deseas. Tu comodidad y tus límites importan.",
-        protectiveRule: "Tu cuerpo te pertenece. Puedes saludar con una sonrisa o la mano si prefieres no abrazar."
-      },
-      {
-        text: "Amarillo: Tienes derecho a decir con calma 'No gracias, hoy prefiero solo saludar con la mano'.",
-        trafficLight: "yellow",
-        isCorrect: true,
-        explanation: "¡Muy bien! Tienes total libertad de decidir sobre tu espacio personal. Decir 'no' debe ser respetado.",
-        protectiveRule: "No tienes que aceptar abrazos ni caricias si te hacen sentir incomodidad."
-      }
-    ]
-  },
-  {
-    id: 3,
-    situation: "Una persona en el parque o en internet te pide que le muestres o te tomes fotos de las zonas cubiertas por tu traje de baño, diciendo que 'será un secreto de amigos'.",
-    context: "Zonas privadas y protección personal",
-    avatarMood: "alert",
-    targetZoneId: "private",
-    options: [
-      {
-        text: "Rojo: ¡ALTO TOTAL! Nadie debe mirar, tocar ni pedir fotos de tus zonas privadas. ¡Cuéntaselo ya a un adulto de confianza!",
-        trafficLight: "red",
-        isCorrect: true,
-        explanation: "¡Excelente decisión! Tus zonas íntimas son inviolables. Los secretos incómodos sobre tu cuerpo NUNCA deben guardarse.",
-        protectiveRule: "Nunca es tu culpa. Aléjate de inmediato y cuéntaselo a mamá, papá o tu maestra."
-      },
-      {
-        text: "Verde: Puedes guardar el secreto si te prometen un regalo o dulce.",
-        trafficLight: "green",
-        isCorrect: false,
-        explanation: "¡Peligro! Nadie puede pedirte secretos sobre tu cuerpo a cambio de regalos o promesas.",
-        protectiveRule: "Si un secreto te hace sentir miedo, incomodidad o tristeza, ¡rompe el silencio y busca ayuda!"
-      }
-    ]
-  },
-  {
-    id: 4,
-    situation: "Fuiste al médico porque te dolía el estómago. El doctor te explica qué parte va a revisar con tu mamá o papá presentes a tu lado.",
-    context: "Atención médica con acompañamiento y cuidado",
-    avatarMood: "happy",
-    targetZoneId: "private",
-    options: [
-      {
-        text: "Verde / Seguro: La atención médica por salud es válida cuando te explican con respeto y tus padres o tutores están presentes cuidándote.",
-        trafficLight: "green",
-        isCorrect: true,
-        explanation: "¡Correcto! Los médicos y enfermeras pueden revisarte por salud y bienestar, siempre con explicación clara y acompañamiento de tus tutores.",
-        protectiveRule: "Las revisiones médicas deben ser respetuosas, necesarias y acompañadas de tu familia de confianza."
-      },
-      {
-        text: "Rojo: Ningún médico puede revisarte aunque te sientas enfermo.",
-        trafficLight: "red",
-        isCorrect: false,
-        explanation: "Cuidar la salud es indispensable. Lo importante es que siempre estén presentes tus familiares de confianza y se te explique con respeto.",
-        protectiveRule: "La salud y el cuidado médico se realizan siempre con protección y acompañamiento adulto."
-      }
-    ]
-  },
-  {
-    id: 5,
-    situation: "Una persona conocida intenta hacerte cosquillas o caricias que te molestan. Le dices '¡Basta, no me gusta!' pero continúa insistiendo.",
-    context: "Límites ignorados y búsqueda de apoyo",
-    avatarMood: "alert",
-    targetZoneId: "shoulders",
-    options: [
-      {
-        text: "Rojo / Alerta: Aléjate, di con voz firme '¡Dije que NO!' y acude de inmediato con una persona adulta de confianza.",
-        trafficLight: "red",
-        isCorrect: true,
-        explanation: "¡Magnífico! Cuando alguien no respeta tu 'NO', debes alejarte y pedir apoyo. Si la primera persona no te escucha, acude con otra.",
-        protectiveRule: "Si alguien no respeta tus límites, busca ayuda sin dudar. Recuerda: NUNCA es tu culpa."
-      },
-      {
-        text: "Amarillo: Quedarte callado y soportarlo para que la otra persona no se enoje.",
-        trafficLight: "yellow",
-        isCorrect: false,
-        explanation: "Nunca debes aguantar algo que te lastima o incomoda por temor al enojo de otros. Tu bienestar es lo primero.",
-        protectiveRule: "Tus límites son valiosos y deben ser respetados por todas y todos."
-      }
-    ]
-  }
-];
-
-export default function SemaforoContacto() {
-  const [mode, setMode] = useState<"missions" | "explore">("missions");
-  const [currentIdx, setCurrentIdx] = useState<number>(0);
-  const [selectedOptionIdx, setSelectedOptionIdx] = useState<number | null>(null);
-  const [selectedBodyZone, setSelectedBodyZone] = useState<"hands" | "shoulders" | "private">("hands");
-  const [score, setScore] = useState<number>(0);
-  const [stars, setStars] = useState<number>(0);
-  const [answeredCount, setAnsweredCount] = useState<number>(0);
-  const [isVictoryOpen, setIsVictoryOpen] = useState<boolean>(false);
-  const [isInstructionsOpen, setIsInstructionsOpen] = useState<boolean>(false);
-  const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
-  const [readAloud, setReadAloud] = useState<boolean>(false);
-
-  const activeMission = MISSIONS[currentIdx];
-
-  const handleSelectOption = (idx: number) => {
-    if (selectedOptionIdx !== null) return;
-    setSelectedOptionIdx(idx);
-
-    const option = activeMission.options[idx];
-    if (option.isCorrect) {
-      sound.playCorrect();
-      setScore((s) => s + 100);
-      setStars((st) => Math.min(3, st + 1));
-
-      if (readAloud && typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(option.explanation);
-        utter.lang = "es-MX";
-        window.speechSynthesis.speak(utter);
-      }
-    } else {
-      sound.playAlert();
-    }
-  };
-
-  const handleNextMission = () => {
-    sound.playClick();
-    if (currentIdx + 1 < MISSIONS.length) {
-      setCurrentIdx((prev) => prev + 1);
-      setSelectedOptionIdx(null);
-      setAnsweredCount((c) => c + 1);
-    } else {
-      setIsVictoryOpen(true);
-    }
-  };
-
-  const handleRestart = () => {
-    sound.playPowerup();
-    setCurrentIdx(0);
-    setSelectedOptionIdx(null);
-    setScore(0);
-    setStars(0);
-    setAnsweredCount(0);
-    setIsVictoryOpen(false);
-  };
-
-  const handleZoneClick = (zone: "hands" | "shoulders" | "private") => {
-    sound.playClick();
-    setSelectedBodyZone(zone);
-  };
-
-  const handleNarrateSituation = () => {
-    sound.playClick();
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(
-        `Misión ${activeMission.id}. ${activeMission.situation}`
+/** Ilustración SVG propia para cada tipo de situación cotidiana */
+function SituationIllustration({ sceneType }: { sceneType: string }) {
+  switch (sceneType) {
+    case "high_five":
+    case "friendly_wave":
+      return (
+        <svg viewBox="0 0 180 110" className="w-full h-28" aria-hidden="true">
+          <rect width="180" height="110" rx="16" fill="#ecfdf5" />
+          <circle cx="55" cy="44" r="16" fill="#fbbf24" />
+          <path d="M 48 44 Q 55 52 62 44" stroke="#1e293b" strokeWidth="2.5" fill="none" />
+          <rect x="42" y="64" width="26" height="32" rx="10" fill="#10b981" />
+          <circle cx="125" cy="44" r="16" fill="#f472b6" />
+          <path d="M 118 44 Q 125 52 132 44" stroke="#1e293b" strokeWidth="2.5" fill="none" />
+          <rect x="112" y="64" width="26" height="32" rx="10" fill="#3b82f6" />
+          <path d="M 68 72 L 86 48 M 112 72 L 94 48" stroke="#f59e0b" strokeWidth="7" strokeLinecap="round" />
+          <text x="90" y="34" textAnchor="middle" fontSize="18">✨</text>
+        </svg>
       );
-      utter.lang = "es-MX";
-      window.speechSynthesis.speak(utter);
-    }
-  };
+    case "unwanted_hug":
+    case "hair_pull":
+      return (
+        <svg viewBox="0 0 180 110" className="w-full h-28" aria-hidden="true">
+          <rect width="180" height="110" rx="16" fill="#fefce8" />
+          <circle cx="90" cy="42" r="17" fill="#fde047" />
+          <circle cx="84" cy="39" r="2.2" fill="#1e293b" />
+          <circle cx="96" cy="39" r="2.2" fill="#1e293b" />
+          <path d="M 83 48 Q 90 44 97 48" stroke="#1e293b" strokeWidth="2.5" fill="none" />
+          <rect x="74" y="63" width="32" height="36" rx="12" fill="#f59e0b" />
+          <circle cx="90" cy="55" r="42" fill="none" stroke="#eab308" strokeWidth="2.5" strokeDasharray="6 4" />
+          <text x="144" y="36" fontSize="20">✋</text>
+        </svg>
+      );
+    case "doctor_visit":
+    case "coach_respect":
+      return (
+        <svg viewBox="0 0 180 110" className="w-full h-28" aria-hidden="true">
+          <rect width="180" height="110" rx="16" fill="#eff6ff" />
+          <circle cx="60" cy="45" r="15" fill="#93c5fd" />
+          <rect x="46" y="63" width="28" height="34" rx="10" fill="#ffffff" stroke="#3b82f6" strokeWidth="2" />
+          <rect x="57" y="70" width="6" height="14" rx="1" fill="#ef4444" />
+          <rect x="53" y="74" width="14" height="6" rx="1" fill="#ef4444" />
+          <circle cx="120" cy="48" r="13" fill="#86efac" />
+          <rect x="108" y="64" width="24" height="32" rx="10" fill="#10b981" />
+          <circle cx="146" cy="40" r="12" fill="#fde68a" />
+          <rect x="136" y="55" width="20" height="38" rx="8" fill="#8b5cf6" />
+        </svg>
+      );
+    default:
+      return (
+        <svg viewBox="0 0 180 110" className="w-full h-28" aria-hidden="true">
+          <rect width="180" height="110" rx="16" fill="#fff1f2" />
+          <polygon points="90,14 128,82 52,82" fill="#fecdd3" stroke="#e11d48" strokeWidth="3.5" strokeLinejoin="round" />
+          <rect x="87" y="36" width="6" height="24" rx="3" fill="#be123c" />
+          <circle cx="90" cy="70" r="4" fill="#be123c" />
+          <text x="26" y="60" fontSize="22">🛡️</text>
+          <text x="142" y="60" fontSize="22">🗣️</text>
+        </svg>
+      );
+  }
+}
+
+/** Silueta corporal neutra y respetuosa para explorar límites personales */
+function NeutralBodyMap({
+  selectedZone,
+  onSelectZone,
+}: {
+  selectedZone: BodyZoneInfo["id"];
+  onSelectZone: (id: BodyZoneInfo["id"]) => void;
+}) {
+  const zoneColor = (id: BodyZoneInfo["id"], base: string) =>
+    selectedZone === id ? "#4f46e5" : base;
 
   return (
-    <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border-2 border-indigo-100 max-w-4xl mx-auto space-y-6">
-      {/* Shared Header Component */}
-      <GameHeader
-        title="🚦 Semáforo del Respeto y Autocuidado"
-        badge="Consentimiento, límites corporales y prevención de abusos (Meta ODS 5.2)"
-        levelBadge="Nivel Infantil (6 a 9 años)"
-        levelColor="emerald"
-        odsTarget="ODS 5.2"
-        score={score}
-        stars={stars}
-        maxStars={3}
-        onOpenHelp={() => setIsHelpOpen(true)}
-        onOpenInstructions={() => setIsInstructionsOpen(true)}
-        onRestart={handleRestart}
-      />
+    <svg
+      viewBox="0 0 220 300"
+      className="w-48 sm:w-56 mx-auto select-none"
+      role="img"
+      aria-label="Silueta corporal neutra interactiva para aprender límites personales"
+    >
+      {/* Fondo */}
+      <rect x="10" y="10" width="200" height="280" rx="28" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="2" />
 
-      {/* Mode Switcher Tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-100 p-1.5 rounded-2xl">
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => {
-              sound.playClick();
-              setMode("missions");
-            }}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
-              mode === "missions"
-                ? "bg-white text-indigo-700 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            🎯 Modo Misiones ({currentIdx + 1}/{MISSIONS.length})
-          </button>
+      {/* Cabeza */}
+      <g
+        onClick={() => onSelectZone("head")}
+        className="cursor-pointer transition-opacity hover:opacity-85"
+        role="button"
+        tabIndex={0}
+        aria-label="Zona: Cabeza y rostro"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelectZone("head");
+          }
+        }}
+      >
+        <circle cx="110" cy="54" r="28" fill={zoneColor("head", "#fde68a")} stroke="#475569" strokeWidth="2.5" />
+        <circle cx="101" cy="50" r="3" fill="#334155" />
+        <circle cx="119" cy="50" r="3" fill="#334155" />
+        <path d="M 102 62 Q 110 68 118 62" stroke="#334155" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+      </g>
 
-          <button
-            onClick={() => {
-              sound.playClick();
-              setMode("explore");
-            }}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
-              mode === "explore"
-                ? "bg-white text-emerald-700 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            🔍 Modo Explorar el Cuerpo
-          </button>
+      {/* Hombros / Brazos superiores */}
+      <g
+        onClick={() => onSelectZone("shoulders")}
+        className="cursor-pointer hover:opacity-85"
+        role="button"
+        tabIndex={0}
+        aria-label="Zona: Hombros y espalda alta"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelectZone("shoulders");
+          }
+        }}
+      >
+        <rect x="52" y="88" width="116" height="26" rx="13" fill={zoneColor("shoulders", "#fed7aa")} stroke="#475569" strokeWidth="2.5" />
+      </g>
+
+      {/* Manos */}
+      <g
+        onClick={() => onSelectZone("hands")}
+        className="cursor-pointer hover:opacity-85"
+        role="button"
+        tabIndex={0}
+        aria-label="Zona: Manos y antebrazos"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelectZone("hands");
+          }
+        }}
+      >
+        <rect x="34" y="114" width="24" height="58" rx="12" fill={zoneColor("hands", "#bbf7d0")} stroke="#15803d" strokeWidth="2.5" />
+        <rect x="162" y="114" width="24" height="58" rx="12" fill={zoneColor("hands", "#bbf7d0")} stroke="#15803d" strokeWidth="2.5" />
+      </g>
+
+      {/* Zona privada (traje de baño neutro) */}
+      <g
+        onClick={() => onSelectZone("chest_hip")}
+        className="cursor-pointer hover:opacity-90"
+        role="button"
+        tabIndex={0}
+        aria-label="Zona privada cubierta por traje de baño"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelectZone("chest_hip");
+          }
+        }}
+      >
+        <rect
+          x="72"
+          y="114"
+          width="76"
+          height="82"
+          rx="14"
+          fill={zoneColor("chest_hip", "#fecaca")}
+          stroke="#dc2626"
+          strokeWidth="3"
+        />
+        <text x="110" y="152" textAnchor="middle" fontSize="11" fontWeight="bold" fill={selectedZone === "chest_hip" ? "#ffffff" : "#991b1b"}>
+          TRAJE DE
+        </text>
+        <text x="110" y="167" textAnchor="middle" fontSize="11" fontWeight="bold" fill={selectedZone === "chest_hip" ? "#ffffff" : "#991b1b"}>
+          BAÑO 🛡️
+        </text>
+      </g>
+
+      {/* Piernas */}
+      <g
+        onClick={() => onSelectZone("legs")}
+        className="cursor-pointer hover:opacity-85"
+        role="button"
+        tabIndex={0}
+        aria-label="Zona: Piernas y pies"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelectZone("legs");
+          }
+        }}
+      >
+        <rect x="76" y="200" width="28" height="72" rx="12" fill={zoneColor("legs", "#fef08a")} stroke="#475569" strokeWidth="2.5" />
+        <rect x="116" y="200" width="28" height="72" rx="12" fill={zoneColor("legs", "#fef08a")} stroke="#475569" strokeWidth="2.5" />
+      </g>
+    </svg>
+  );
+}
+
+function SemaforoGameplay({
+  difficulty,
+  onComplete,
+}: {
+  difficulty: DifficultyLevel;
+  onComplete: (stars: 0 | 1 | 2 | 3, score: number, maxScore: number, msg: string) => void;
+}) {
+  const { playClick, playCorrect, playAlert } = useSound();
+
+  const missions = useMemo(() => {
+    if (difficulty === "facil") return SEMAFORO_SITUATIONS.slice(0, 6);
+    if (difficulty === "normal") return SEMAFORO_SITUATIONS.slice(0, 10);
+    return SEMAFORO_SITUATIONS; // 12
+  }, [difficulty]);
+
+  const [step, setStep] = useState<"missions" | "bodymap" | "trusted">("missions");
+  const [idx, setIdx] = useState(0);
+  const [chosenColor, setChosenColor] = useState<TrafficColor | null>(null);
+  const [score, setScore] = useState(0);
+  const [shakeWrong, setShakeWrong] = useState(false);
+  const [readAloud, setReadAloud] = useState(false);
+
+  // Body map state
+  const [selectedZone, setSelectedZone] = useState<BodyZoneInfo["id"]>("chest_hip");
+  const [inspectedZones, setInspectedZones] = useState<string[]>(["chest_hip"]);
+
+  // Mini escena final state
+  const [selectedAdultId, setSelectedAdultId] = useState<string | null>(null);
+
+  const current = missions[idx];
+  const zoneDetail = BODY_ZONES_INFO.find((z) => z.id === selectedZone)!;
+
+  React.useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const speak = (text: string) => {
+    if (!readAloud || typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "es-MX";
+    window.speechSynthesis.speak(u);
+  };
+
+  const handleChooseColor = (color: TrafficColor) => {
+    if (chosenColor !== null || step !== "missions") return;
+    setChosenColor(color);
+    const isRight = color === current.correctColor;
+
+    if (isRight) {
+      playCorrect();
+      setScore((s) => s + 100);
+      speak(current.explanation);
+    } else {
+      playAlert();
+      setShakeWrong(true);
+      setTimeout(() => setShakeWrong(false), 450);
+      speak(`Casi. ${current.explanation}`);
+    }
+  };
+
+  // Teclado 1=Verde, 2=Amarillo, 3=Rojo
+  useKeyboardControls(
+    {
+      "1": () => handleChooseColor("green"),
+      "2": () => handleChooseColor("yellow"),
+      "3": () => handleChooseColor("red"),
+    },
+    step === "missions" && chosenColor === null
+  );
+
+  const handleNextMission = () => {
+    playClick();
+    if (idx + 1 < missions.length) {
+      setIdx(idx + 1);
+      setChosenColor(null);
+    } else {
+      setStep("bodymap");
+    }
+  };
+
+  const handleZoneSelect = (id: BodyZoneInfo["id"]) => {
+    playClick();
+    setSelectedZone(id);
+    if (!inspectedZones.includes(id)) {
+      setInspectedZones((prev) => [...prev, id]);
+    }
+  };
+
+  const handleTrustedSelect = (optionId: string) => {
+    playClick();
+    setSelectedAdultId(optionId);
+    const found = TRUSTED_ADULTS_MINI_SCENE.find((a) => a.id === optionId);
+    if (found?.isTrusted) {
+      playCorrect();
+    } else {
+      playAlert();
+    }
+  };
+
+  const handleFinishAll = () => {
+    const trustedPicked = TRUSTED_ADULTS_MINI_SCENE.find((a) => a.id === selectedAdultId)?.isTrusted;
+    const totalScore = score + (trustedPicked ? 100 : 0);
+    const maxScore = missions.length * 100 + 100;
+    const ratio = totalScore / maxScore;
+    const stars: 0 | 1 | 2 | 3 = ratio >= 0.85 ? 3 : ratio >= 0.6 ? 2 : 1;
+
+    onComplete(
+      stars,
+      totalScore,
+      maxScore,
+      `¡Completaste ${missions.length} situaciones del Semáforo del Respeto y exploraste tu red de confianza! Recuerda siempre: tu cuerpo es tuyo, puedes decir ¡NO! y contar a un adulto de confianza.`
+    );
+  };
+
+  const isAnswerCorrect = chosenColor === current?.correctColor;
+
+  return (
+    <div className="bg-white rounded-4xl border-2 border-emerald-200 shadow-xl p-5 sm:p-8 space-y-6">
+      {/* Barra superior del juego */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
+        <div className="flex items-center gap-2">
+          <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 text-xs font-black">
+            {step === "missions"
+              ? `Misión ${idx + 1} de ${missions.length}`
+              : step === "bodymap"
+              ? "Paso 2 · Mapa Corporal"
+              : "Paso 3 · ¿A quién le cuento?"}
+          </span>
+          <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-black">
+            {score} pts
+          </span>
         </div>
 
-        <button
-          onClick={handleNarrateSituation}
-          className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-indigo-600 text-xs font-bold transition-colors border border-slate-200 flex items-center gap-1.5 shadow-xs"
-          title="Escuchar narración de la misión"
-        >
-          <Volume2 className="w-3.5 h-3.5" />
-          <span>Voz de lectura</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              playClick();
+              setReadAloud((v) => !v);
+            }}
+            className={`min-h-[44px] px-3 py-1.5 rounded-xl text-xs font-bold border inline-flex items-center gap-1.5 ${
+              readAloud
+                ? "bg-indigo-600 text-white border-indigo-700"
+                : "bg-slate-50 text-slate-700 border-slate-200"
+            }`}
+          >
+            <Volume2 className="w-4 h-4" />
+            {readAloud ? "Voz Activa" : "Activar Voz"}
+          </button>
+
+          <div className="flex rounded-xl bg-slate-100 p-1 text-xs font-bold">
+            <button
+              onClick={() => setStep("missions")}
+              className={`px-2.5 py-1.5 rounded-lg ${
+                step === "missions" ? "bg-white text-emerald-700 shadow-xs" : "text-slate-600"
+              }`}
+            >
+              🚦 Misiones
+            </button>
+            <button
+              onClick={() => setStep("bodymap")}
+              className={`px-2.5 py-1.5 rounded-lg ${
+                step === "bodymap" ? "bg-white text-emerald-700 shadow-xs" : "text-slate-600"
+              }`}
+            >
+              🧍 Cuerpo
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Main Content Area */}
-      {mode === "missions" ? (
-        <div className="space-y-6">
-          {/* Mission Context & Question Card */}
-          <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 p-5 sm:p-6 rounded-3xl border-2 border-indigo-200 shadow-xs relative">
-            <div className="flex items-start justify-between gap-3 mb-2">
-              <span className="text-[11px] font-black uppercase tracking-wider text-indigo-800 bg-indigo-200/70 px-3 py-0.5 rounded-full inline-block">
-                Misión {activeMission.id} de {MISSIONS.length} • {activeMission.context}
-              </span>
-              <span className="text-xs font-bold text-slate-500">
-                Puntuación actual: <strong>{score} pts</strong>
-              </span>
-            </div>
-
-            <h3 className="text-base sm:text-lg font-black text-slate-900 leading-snug mt-2">
-              {activeMission.situation}
-            </h3>
-
-            <p className="text-xs font-bold text-indigo-950 mt-3 flex items-center gap-1.5">
-              <Lightbulb className="w-4 h-4 text-amber-500" />
-              ¿Qué semáforo y decisión corresponde aplicar en esta situación?
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-            {/* Clothed Interactive Character Silhouette */}
-            <div className="md:col-span-5 flex flex-col items-center justify-center p-5 bg-slate-50 rounded-3xl border-2 border-slate-200">
-              <span className="text-[11px] font-black uppercase text-slate-500 mb-2">
-                Guardián de tus Límites
-              </span>
-
-              {/* Clothed friendly child character SVG */}
-              <svg
-                viewBox="0 0 200 320"
-                className="w-48 h-72 drop-shadow-md select-none transition-transform hover:scale-102"
-                aria-label="Silueta ilustrada de un personaje infantil con ropa"
-              >
-                {/* Cabello amigable */}
-                <path
-                  d="M 65 50 Q 100 15 135 50 Q 140 25 100 18 Q 60 25 65 50 Z"
-                  fill="#78350f"
-                />
-
-                {/* Cabeza / Rostro */}
-                <circle
-                  cx="100"
-                  cy="52"
-                  r="26"
-                  fill="#fde68a"
-                  stroke="#d97706"
-                  strokeWidth="2"
-                />
-
-                {/* Ojos */}
-                <circle cx="92" cy="48" r="3.5" fill="#1e293b" />
-                <circle cx="108" cy="48" r="3.5" fill="#1e293b" />
-
-                {/* Expresión bucal según estado */}
-                {activeMission.avatarMood === "happy" && (
-                  <path
-                    d="M 91 58 Q 100 68 109 58"
-                    stroke="#1e293b"
-                    strokeWidth="2.5"
-                    fill="none"
-                    strokeLinecap="round"
-                  />
-                )}
-                {activeMission.avatarMood === "thinking" && (
-                  <ellipse cx="100" cy="60" rx="3.5" ry="4" fill="#1e293b" />
-                )}
-                {activeMission.avatarMood === "alert" && (
-                  <path
-                    d="M 92 63 Q 100 56 108 63"
-                    stroke="#b91c1c"
-                    strokeWidth="3"
-                    fill="none"
-                    strokeLinecap="round"
-                  />
-                )}
-
-                {/* Cuello */}
-                <rect x="94" y="76" width="12" height="10" fill="#fde68a" />
-
-                {/* Playera / Ropa Superior (Torso) */}
-                <path
-                  d="M 68 85 L 132 85 L 138 155 L 62 155 Z"
-                  className={`cursor-pointer transition-all ${
-                    activeMission.targetZoneId === "shoulders" || activeMission.targetZoneId === "private"
-                      ? "fill-indigo-500 stroke-indigo-700 stroke-[3px]"
-                      : "fill-indigo-400 stroke-indigo-600 stroke-2"
-                  }`}
-                  onClick={() => handleZoneClick("shoulders")}
-                />
-
-                {/* Escudo protector en la playera */}
-                <g transform="translate(90, 105) scale(0.8)">
-                  <path
-                    d="M12 2L3 6v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V6l-9-4z"
-                    fill="#ffffff"
-                    opacity="0.95"
-                  />
-                </g>
-
-                {/* Brazos con mangas */}
-                {/* Manga Izquierda */}
-                <path d="M 68 85 L 42 110 L 52 118 L 74 96 Z" fill="#6366f1" />
-                {/* Brazo y Mano Izquierda */}
-                <path
-                  d="M 45 112 L 30 148 L 40 152 L 52 118 Z"
-                  className="cursor-pointer fill-amber-200 stroke-amber-400 stroke-2 hover:fill-emerald-300"
-                  onClick={() => handleZoneClick("hands")}
-                />
-                <circle
-                  cx="32"
-                  cy="154"
-                  r="9"
-                  className={`cursor-pointer transition-all ${
-                    activeMission.targetZoneId === "hands"
-                      ? "fill-emerald-400 stroke-emerald-600 stroke-[3px]"
-                      : "fill-amber-200 hover:fill-emerald-300 stroke-amber-500 stroke-2"
-                  }`}
-                  onClick={() => handleZoneClick("hands")}
-                />
-
-                {/* Manga Derecha */}
-                <path d="M 132 85 L 158 110 L 148 118 L 126 96 Z" fill="#6366f1" />
-                {/* Brazo y Mano Derecha */}
-                <path
-                  d="M 155 112 L 170 148 L 160 152 L 148 118 Z"
-                  className="cursor-pointer fill-amber-200 stroke-amber-400 stroke-2 hover:fill-emerald-300"
-                  onClick={() => handleZoneClick("hands")}
-                />
-                <circle
-                  cx="168"
-                  cy="154"
-                  r="9"
-                  className={`cursor-pointer transition-all ${
-                    activeMission.targetZoneId === "hands"
-                      ? "fill-emerald-400 stroke-emerald-600 stroke-[3px]"
-                      : "fill-amber-200 hover:fill-emerald-300 stroke-amber-500 stroke-2"
-                  }`}
-                  onClick={() => handleZoneClick("hands")}
-                />
-
-                {/* Short / Pantalón (Zona de traje de baño / ropa interior protegida) */}
-                <path
-                  d="M 62 155 L 138 155 L 142 205 L 105 205 L 100 180 L 95 205 L 58 205 Z"
-                  className={`cursor-pointer transition-all ${
-                    activeMission.targetZoneId === "private"
-                      ? "fill-rose-500 stroke-rose-700 stroke-[4px]"
-                      : "fill-rose-400 stroke-rose-600 stroke-2 hover:fill-rose-500"
-                  }`}
-                  onClick={() => handleZoneClick("private")}
-                />
-
-                {/* Piernas */}
-                <rect x="68" y="205" width="18" height="60" rx="6" fill="#fde68a" />
-                <rect x="114" y="205" width="18" height="60" rx="6" fill="#fde68a" />
-
-                {/* Calzado / Tenis */}
-                <ellipse cx="77" cy="272" rx="14" ry="8" fill="#3b82f6" />
-                <ellipse cx="123" cy="272" rx="14" ry="8" fill="#3b82f6" />
-              </svg>
-
-              <p className="text-[10px] text-slate-500 text-center mt-2 font-medium">
-                Personaje con ropa completa • Toca las manos, torso o traje de baño para probar
+      {/* PASO 1: MISIONES */}
+      {step === "missions" && (
+        <div className={`space-y-5 ${shakeWrong ? "animate-shake" : ""}`}>
+          {/* Tarjeta arrastrable de situación */}
+          <div
+            draggable={chosenColor === null}
+            onDragStart={(e) => e.dataTransfer.setData("text/plain", String(current.id))}
+            className="rounded-3xl border-2 border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 shadow-sm grid grid-cols-1 md:grid-cols-[200px_1fr] gap-5 items-center cursor-grab active:cursor-grabbing"
+          >
+            <SituationIllustration sceneType={current.sceneType} />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-lg sm:text-xl font-display font-black text-slate-900">
+                  {current.title}
+                </h3>
+                <button
+                  onClick={() => speak(`${current.title}. ${current.situation}`)}
+                  className="min-h-[36px] px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold inline-flex items-center gap-1"
+                  aria-label="Escuchar situación"
+                >
+                  <Volume2 className="w-3.5 h-3.5" /> Escuchar
+                </button>
+              </div>
+              <p className="text-sm sm:text-base text-slate-700 leading-relaxed font-medium">
+                {current.situation}
+              </p>
+              <p className="text-[11px] font-bold text-slate-600">
+                Arrastra esta situación hacia el color correcto del semáforo o presiona un botón (teclas 1, 2 o 3).
               </p>
             </div>
-
-            {/* Answer Options */}
-            <div className="md:col-span-7 space-y-3">
-              <span className="text-xs font-black uppercase text-slate-600 block">
-                Selecciona la respuesta adecuada:
-              </span>
-
-              {activeMission.options.map((opt, i) => {
-                const isSelected = selectedOptionIdx === i;
-                const showValidation = selectedOptionIdx !== null;
-
-                let borderClasses = "border-slate-200 hover:border-indigo-400 bg-white";
-                if (showValidation) {
-                  if (opt.isCorrect) {
-                    borderClasses = "border-emerald-500 bg-emerald-50/90 text-emerald-950 ring-2 ring-emerald-200";
-                  } else if (isSelected && !opt.isCorrect) {
-                    borderClasses = "border-rose-500 bg-rose-50 text-rose-950";
-                  } else {
-                    borderClasses = "border-slate-200 opacity-60 bg-slate-50";
-                  }
-                }
-
-                return (
-                  <button
-                    key={i}
-                    onClick={() => handleSelectOption(i)}
-                    disabled={selectedOptionIdx !== null}
-                    className={`w-full text-left p-4 rounded-2xl border-2 transition-all shadow-xs flex items-start gap-3 ${borderClasses}`}
-                  >
-                    <span className="text-xl shrink-0 mt-0.5">
-                      {opt.trafficLight === "green" ? "🟢" : opt.trafficLight === "yellow" ? "🟡" : "🔴"}
-                    </span>
-                    <div className="flex-1">
-                      <p className="font-bold text-xs sm:text-sm text-slate-900 leading-snug">
-                        {opt.text}
-                      </p>
-
-                      {showValidation && isSelected && (
-                        <div className="mt-2.5 pt-2 border-t border-slate-200/80 text-xs">
-                          <p className="font-semibold text-slate-800">
-                            {opt.explanation}
-                          </p>
-                          <p className="text-indigo-900 font-bold mt-1 bg-white/80 p-2 rounded-xl border border-indigo-100">
-                            🛡️ {opt.protectiveRule}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-
-              {/* Next Mission Button */}
-              {selectedOptionIdx !== null && (
-                <div className="pt-2 flex justify-end">
-                  <button
-                    onClick={handleNextMission}
-                    className="px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs sm:text-sm shadow-md transition-all flex items-center gap-2"
-                  >
-                    <span>
-                      {currentIdx + 1 < MISSIONS.length ? "Siguiente Misión" : "Ver Resultados"}
-                    </span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
-        </div>
-      ) : (
-        /* Explore Body & Consent Mode */
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-          <div className="md:col-span-5 bg-slate-50 p-6 rounded-3xl border-2 border-slate-200 flex flex-col items-center">
-            <span className="text-xs font-black uppercase text-slate-600 mb-3">
-              Selecciona una zona:
-            </span>
 
-            <div className="grid grid-cols-3 gap-2 w-full mb-4">
-              <button
-                onClick={() => handleZoneClick("hands")}
-                className={`py-2 px-2 rounded-xl text-xs font-bold text-center border transition-all ${
-                  selectedBodyZone === "hands"
-                    ? "bg-emerald-600 text-white border-emerald-700 shadow-sm"
-                    : "bg-emerald-50 text-emerald-800 border-emerald-200"
-                }`}
+          {/* 3 Zonas de Semáforo (Drop targets + Click buttons) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            {[
+              {
+                color: "green" as TrafficColor,
+                label: "VERDE · Seguro y con permiso",
+                sub: "Ambas personas quieren y hay respeto",
+                emoji: "🟢",
+                cls: "border-emerald-400 bg-emerald-50 hover:bg-emerald-100 text-emerald-950",
+              },
+              {
+                color: "yellow" as TrafficColor,
+                label: "AMARILLO · Tú decides",
+                sub: "Puedes decir 'No gracias, prefiero otra cosa'",
+                emoji: "🟡",
+                cls: "border-amber-400 bg-amber-50 hover:bg-amber-100 text-amber-950",
+              },
+              {
+                color: "red" as TrafficColor,
+                label: "ROJO · ¡ALTO y pedir ayuda!",
+                sub: "Di ¡NO!, aléjate y avisa a un adulto de confianza",
+                emoji: "🔴",
+                cls: "border-rose-400 bg-rose-50 hover:bg-rose-100 text-rose-950",
+              },
+            ].map((btn) => {
+              const isPicked = chosenColor === btn.color;
+              const isTrue = current.correctColor === btn.color;
+              return (
+                <button
+                  key={btn.color}
+                  onClick={() => handleChooseColor(btn.color)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    handleChooseColor(btn.color);
+                  }}
+                  disabled={chosenColor !== null}
+                  className={`min-h-[96px] p-4 rounded-3xl border-3 text-left transition-all flex flex-col justify-between shadow-sm ${
+                    chosenColor === null
+                      ? btn.cls
+                      : isTrue
+                      ? "border-emerald-600 bg-emerald-100 ring-4 ring-emerald-200"
+                      : isPicked
+                      ? "border-rose-600 bg-rose-100"
+                      : "border-slate-200 bg-slate-50 opacity-55"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-2xl">{btn.emoji}</span>
+                    {chosenColor !== null && isTrue && (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-700" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-black text-sm">{btn.label}</p>
+                    <p className="text-xs opacity-85 mt-0.5">{btn.sub}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Retroalimentación inmediata con Axo */}
+          {chosenColor !== null && (
+            <div
+              className={`rounded-3xl p-4 sm:p-5 border-2 flex flex-col sm:flex-row items-center gap-4 animate-scaleUp ${
+                isAnswerCorrect
+                  ? "bg-emerald-50 border-emerald-300"
+                  : "bg-amber-50 border-amber-300"
+              }`}
+            >
+              <Mascot expression={isAnswerCorrect ? "celebrating" : "encouraging"} size={72} />
+              <div className="flex-1 space-y-1">
+                <p className="font-black text-sm text-slate-900">
+                  {isAnswerCorrect ? "¡Excelente criterio de autocuidado!" : "Buena oportunidad para aprender juntos:"}
+                </p>
+                <p className="text-xs sm:text-sm text-slate-800 leading-relaxed">
+                  {current.explanation}
+                </p>
+                <p className="text-xs font-bold text-indigo-800 pt-1">
+                  💡 Axo dice: &ldquo;{current.axoTip}&rdquo;
+                </p>
+              </div>
+              <Button3D
+                variant="infantil"
+                size="md"
+                onClick={handleNextMission}
+                icon={<ArrowRight className="w-4 h-4" />}
+                iconPosition="right"
               >
-                🟢 Manos
-              </button>
-              <button
-                onClick={() => handleZoneClick("shoulders")}
-                className={`py-2 px-2 rounded-xl text-xs font-bold text-center border transition-all ${
-                  selectedBodyZone === "shoulders"
-                    ? "bg-amber-500 text-white border-amber-600 shadow-sm"
-                    : "bg-amber-50 text-amber-800 border-amber-200"
-                }`}
-              >
-                🟡 Cabeza / Hombros
-              </button>
-              <button
-                onClick={() => handleZoneClick("private")}
-                className={`py-2 px-2 rounded-xl text-xs font-bold text-center border transition-all ${
-                  selectedBodyZone === "private"
-                    ? "bg-rose-600 text-white border-rose-700 shadow-sm"
-                    : "bg-rose-50 text-rose-800 border-rose-200"
-                }`}
-              >
-                🔴 Traje de Baño
-              </button>
+                {idx + 1 < missions.length ? "Siguiente" : "Ir al Mapa Corporal"}
+              </Button3D>
             </div>
+          )}
+        </div>
+      )}
 
-            <p className="text-[11px] text-slate-500 text-center">
-              Recuerda: Cualquier zona puede requerir tu consentimiento. Lo que importa es cómo te sientes y que tus límites sean respetados.
+      {/* PASO 2: MAPA CORPORAL EDUCATIVO Y RESPETUOSO */}
+      {step === "bodymap" && (
+        <div className="space-y-5 animate-fadeIn">
+          <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-4">
+            <h3 className="font-black text-indigo-950 text-base flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-indigo-600" />
+              Explora tu Mapa Corporal Respetuoso (Toca cada zona)
+            </h3>
+            <p className="text-xs sm:text-sm text-indigo-900/80 mt-1">
+              Identifica qué partes de tu cuerpo son privadas (cubiertas por tu traje de baño) y cómo defender tus límites.
             </p>
           </div>
 
-          <div className="md:col-span-7 bg-white p-6 rounded-3xl border-2 border-indigo-100 shadow-sm space-y-4">
-            {selectedBodyZone === "hands" && (
-              <div className="space-y-2 text-xs sm:text-sm text-slate-700">
-                <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-900 border border-emerald-300 inline-block">
-                  Luz Verde • Saludo y Juego Compartido
-                </span>
-                <h4 className="text-lg font-black text-slate-900">
-                  Manos y Brazos: Compartir con Consentimiento
-                </h4>
-                <p>
-                  Las manos permiten chocar las cinco, jugar a la pelota, escribir, dibujar y darse un apretón de saludo cordial.
-                </p>
-                <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 text-emerald-950 font-medium">
-                  <strong>Regla de Respeto:</strong> Si alguien te toma de la mano o del brazo y no quieres, también tienes derecho a retirar tu mano amablemente y pedir tu espacio.
-                </div>
-              </div>
-            )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+            <NeutralBodyMap selectedZone={selectedZone} onSelectZone={handleZoneSelect} />
 
-            {selectedBodyZone === "shoulders" && (
-              <div className="space-y-2 text-xs sm:text-sm text-slate-700">
-                <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-900 border border-amber-300 inline-block">
-                  Luz Amarilla • Atención y Decisiones Personales
-                </span>
-                <h4 className="text-lg font-black text-slate-900">
-                  Cabeza, Hombros y Espalda: Espacio de Confianza
-                </h4>
-                <p>
-                  Un abrazo o una palmada en la espalda pueden ser afectuosos entre familiares o amistades si ambas personas están de acuerdo.
-                </p>
-                <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-amber-950 font-medium">
-                  <strong>Regla de Respeto:</strong> Si una caricia, abrazo o cosquilla no te gusta o te hace sentir incomodidad, tienes total derecho a decir con claridad: &ldquo;¡No me gusta, por favor detente!&rdquo;
-                </div>
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {BODY_ZONES_INFO.map((z) => (
+                  <button
+                    key={z.id}
+                    onClick={() => handleZoneSelect(z.id)}
+                    className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
+                      selectedZone === z.id
+                        ? "bg-indigo-600 text-white border-indigo-700"
+                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    {z.defaultSafe === "red" ? "🔴" : z.defaultSafe === "green" ? "🟢" : "🟡"}{" "}
+                    {z.label.split(" ")[0]}
+                  </button>
+                ))}
               </div>
-            )}
 
-            {selectedBodyZone === "private" && (
-              <div className="space-y-2 text-xs sm:text-sm text-slate-700">
-                <span className="px-3 py-1 rounded-full text-xs font-black bg-rose-100 text-rose-900 border border-rose-300 inline-block">
-                  Luz Roja • Límites de Protección Personal Íntima
+              <div className="p-5 rounded-3xl border-2 border-slate-200 bg-slate-50 space-y-2.5">
+                <span
+                  className={`inline-block px-3 py-1 rounded-full text-xs font-black ${
+                    zoneDetail.defaultSafe === "red"
+                      ? "bg-rose-100 text-rose-900"
+                      : zoneDetail.defaultSafe === "green"
+                      ? "bg-emerald-100 text-emerald-900"
+                      : "bg-amber-100 text-amber-900"
+                  }`}
+                >
+                  {zoneDetail.label}
                 </span>
-                <h4 className="text-lg font-black text-slate-900">
-                  Zonas Cubiertas por Traje de Baño: ¡Inviolables!
-                </h4>
-                <p>
-                  Son las zonas privadas de tu cuerpo. Nadie tiene derecho a pedirte que las muestres, las toques, permitas que las toquen o que les tomes fotos.
-                </p>
-                <div className="p-3 bg-rose-50 rounded-2xl border border-rose-200 text-rose-950 font-medium">
-                  <strong>Regla de Oro:</strong> Solo doctores con tus padres presentes por salud pueden revisarte. Si alguien insiste o te pide secretos, ¡CUÉNTALO DE INMEDIATO a un adulto de confianza!
-                </div>
+                <p className="text-sm font-black text-slate-900">{zoneDetail.rule}</p>
+                <p className="text-xs text-slate-700 leading-relaxed">{zoneDetail.examples}</p>
               </div>
-            )}
+
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs font-bold text-slate-500">
+                  Zonas exploradas: {inspectedZones.length} de {BODY_ZONES_INFO.length}
+                </span>
+                <Button3D
+                  variant="infantil"
+                  size="md"
+                  onClick={() => {
+                    playClick();
+                    setStep("trusted");
+                  }}
+                  icon={<ArrowRight className="w-4 h-4" />}
+                  iconPosition="right"
+                >
+                  Mini-escena final: ¿A quién cuento?
+                </Button3D>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Pedagogical Guidance Alert Bar */}
-      <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 flex items-start gap-3 text-xs text-indigo-950">
-        <Heart className="w-5 h-5 text-rose-500 fill-rose-500 shrink-0 mt-0.5" />
-        <p className="leading-relaxed">
-          <strong>Mensaje de Empoderamiento Infantil:</strong> Recuerda siempre que tu cuerpo merece respeto. No tienes que aceptar abrazos obligados. Si algo te confunde o inquieta, cuéntaselo a mamá, papá o a tu maestra. ¡Nunca es tu culpa!
-        </p>
-      </div>
+      {/* PASO 3: MINI-ESCENA FINAL (RED DE CONFIANZA) */}
+      {step === "trusted" && (
+        <div className="space-y-5 animate-fadeIn">
+          <div className="flex flex-col sm:flex-row items-center gap-4 bg-rose-50 border-2 border-rose-200 rounded-3xl p-5">
+            <Mascot expression="encouraging" size={80} />
+            <div>
+              <h3 className="text-lg sm:text-xl font-display font-black text-rose-950 flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-rose-600" />
+                Mini-Escena Final: ¿A quién le cuentas si un secreto te incomoda?
+              </h3>
+              <p className="text-xs sm:text-sm text-rose-900 mt-1">
+                Imagina que alguien cruzó un semáforo amarillo o rojo. Elige con quién acudirías en Morelia:
+              </p>
+            </div>
+          </div>
 
-      {/* Shared Modals */}
-      <InstructionsModal
-        isOpen={isInstructionsOpen}
-        onClose={() => setIsInstructionsOpen(false)}
-        title="Instrucciones: Semáforo del Respeto y Autocuidado"
-        objective="Aprender a reconocer límites personales, consentir de forma segura, identificar situaciones de alerta y saber a quién acudir si algo nos incomoda."
-        rules={[
-          "Lee cada situación cotidiana de la misión.",
-          "Decide qué color del semáforo corresponde (Verde: Seguro con consentimiento, Amarillo: Atención y límites, Rojo: Protección absoluta).",
-          "Toca la respuesta que consideres correcta para recibir retroalimentación formativa.",
-          "Gana estrellas y aprende a proteger tu espacio personal y el de tus compañeros."
-        ]}
-        tips={[
-          "No clasifiques una parte del cuerpo sin pensar en el contexto: lo importante es el consentimiento y cómo te hace sentir.",
-          "Usa el botón permanente 'Necesito ayuda' en cualquier momento si requieres apoyo o información de Morelia."
-        ]}
-      />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {TRUSTED_ADULTS_MINI_SCENE.map((opt) => {
+              const picked = selectedAdultId === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => handleTrustedSelect(opt.id)}
+                  className={`min-h-[88px] p-4 rounded-2xl border-2 text-left flex items-center gap-3.5 transition-all ${
+                    picked
+                      ? opt.isTrusted
+                        ? "bg-emerald-50 border-emerald-500 ring-4 ring-emerald-100"
+                        : "bg-amber-50 border-amber-500"
+                      : "bg-white border-slate-200 hover:border-indigo-400"
+                  }`}
+                >
+                  <span className="text-3xl shrink-0">{opt.emoji}</span>
+                  <div>
+                    <p className="font-black text-sm text-slate-900">{opt.name}</p>
+                    <p className="text-xs text-slate-500">{opt.role}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
 
-      <VictoryModal
-        isOpen={isVictoryOpen}
-        title="¡Guardián del Respeto y Autocuidado!"
-        score={score}
-        stars={stars}
-        maxStars={3}
-        takeaway="Has demostrado comprender que tu cuerpo merece respeto, que decir ¡NO! es un derecho y que los secretos incómodos nunca deben guardarse."
-        summaryPoints={[
-          "Sabes reconocer interacciones respetuosas y afectuosas.",
-          "Sabes poner límites claros ante contactos que te incomoden.",
-          "Identificaste las instituciones de auxilio en Morelia ante cualquier duda."
-        ]}
-        onRestart={handleRestart}
-      />
+          {selectedAdultId && (
+            <div className="p-4 rounded-2xl bg-slate-50 border-2 border-slate-200 space-y-3 animate-scaleUp">
+              <p className="text-sm font-bold text-slate-900">
+                {TRUSTED_ADULTS_MINI_SCENE.find((a) => a.id === selectedAdultId)?.feedback}
+              </p>
+              <p className="text-xs text-slate-600 flex items-center gap-1.5">
+                <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                Recuerda: el botón rojo &ldquo;Necesito ayuda&rdquo; arriba siempre te conecta con el directorio de Morelia.
+              </p>
 
-      <EmergencyHelpModal
-        isOpen={isHelpOpen}
-        onClose={() => setIsHelpOpen(false)}
-      />
+              {TRUSTED_ADULTS_MINI_SCENE.find((a) => a.id === selectedAdultId)?.isTrusted && (
+                <Button3D variant="success" size="lg" onClick={handleFinishAll}>
+                  Finalizar Misión y Ver Mis Estrellas ⭐
+                </Button3D>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+
+export default function SemaforoContacto({ onHome, onNextGame }: GameProps) {
+  return (
+    <GameShell
+      gameId="semaforo"
+      tutorialSteps={SEMAFORO_TUTORIAL}
+      difficulties={[
+        { id: "facil", label: "Nivel 1 · Exploración (6 casos)", subtitle: "Situaciones esenciales paso a paso", emoji: "🟢" },
+        { id: "normal", label: "Nivel 2 · Aventura (10 casos)", subtitle: "Incluye límites en internet y escuela", emoji: "🟡" },
+        { id: "reto", label: "Nivel 3 · Guardián (12 casos)", subtitle: "Todos los escenarios + mapa corporal", emoji: "🛡️" },
+      ]}
+      onHome={onHome}
+      onNextGame={onNextGame}
+    >
+      {({ difficulty, finishGame }) => (
+        <SemaforoGameplay difficulty={difficulty} onComplete={finishGame} />
+      )}
+    </GameShell>
   );
 }

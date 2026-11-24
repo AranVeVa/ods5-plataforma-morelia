@@ -33,11 +33,17 @@ export default function VictoryModal({
   React.useEffect(() => {
     if (isOpen) {
       sound.playCelebration();
-      confetti({
-        particleCount: 110,
-        spread: 80,
-        origin: { y: 0.55 },
-      });
+      const reduceMotion =
+        typeof window !== "undefined" &&
+        (window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+          document.documentElement.classList.contains("reduce-motion"));
+      if (!reduceMotion) {
+        confetti({
+          particleCount: 110,
+          spread: 80,
+          origin: { y: 0.55 },
+        });
+      }
     }
   }, [isOpen]);
 
