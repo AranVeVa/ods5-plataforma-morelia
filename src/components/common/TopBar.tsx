@@ -108,13 +108,13 @@ export default function TopBar({
   return (
     <>
       {/* Banda superior Privacy by Design */}
-      <div className="bg-slate-950 text-slate-100 px-3 py-1.5 text-[11px] border-b border-slate-800">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-1.5 font-bold text-emerald-400">
-            <Lock className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-            Privacy by Design: Cero cuentas, cero cookies, cero rastreo
+      <div className="bg-slate-950 text-slate-100 px-3 py-1 text-[10px] sm:text-[11px] border-b border-slate-800">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
+          <span className="inline-flex items-center gap-1.5 font-bold text-emerald-400 truncate">
+            <Lock className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" aria-hidden="true" />
+            <span>Privacy by Design: Cero cuentas, cero cookies, cero rastreo</span>
           </span>
-          <span className="hidden sm:inline text-slate-300 font-medium">
+          <span className="hidden sm:inline text-slate-300 font-medium shrink-0">
             Plataforma Educativa ODS 5 · Morelia, Michoacán
           </span>
         </div>
@@ -127,33 +127,36 @@ export default function TopBar({
           isHeaderVisible ? "translate-y-0" : "-translate-y-full pointer-events-none"
         }`}
       >
-        <div className="max-w-7xl mx-auto px-2.5 sm:px-5 py-2 flex flex-wrap items-center justify-between gap-2">
-          {/* Izquierda: Logo siempre a la izquierda + Inicio + Selector de edad rápido */}
-          <div className="flex items-center gap-2 sm:gap-3">
+        <div className="max-w-7xl mx-auto px-2 sm:px-5 py-1.5 sm:py-2 flex items-center justify-between gap-1.5 sm:gap-3">
+          {/* Izquierda: Logo siempre a la izquierda + Inicio + Selector de edad en pantallas medianas/grandes */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 shrink-0">
             {onGoHome ? (
               <button
                 onClick={() => {
                   playClick();
                   onGoHome();
                 }}
-                className="rounded-2xl focus-visible:ring-2 focus-visible:ring-indigo-500 transition-opacity hover:opacity-90"
+                className="rounded-xl focus-visible:ring-2 focus-visible:ring-indigo-500 transition-opacity hover:opacity-90 shrink-0"
                 aria-label="ODS 5 Morelia — Volver al inicio"
               >
-                <BrandLogo size={38} showText={false} className="sm:hidden" />
-                <BrandLogo size={40} showText={true} compact={true} className="hidden sm:inline-flex" />
+                <BrandLogo size={34} showText={false} className="sm:hidden" />
+                <BrandLogo size={38} showText={true} compact={true} className="hidden sm:inline-flex" />
               </button>
             ) : showHomeButton ? (
               <Link
                 href="/"
                 onClick={() => playClick()}
-                className="rounded-2xl focus-visible:ring-2 focus-visible:ring-indigo-500 transition-opacity hover:opacity-90"
+                className="rounded-xl focus-visible:ring-2 focus-visible:ring-indigo-500 transition-opacity hover:opacity-90 shrink-0"
                 aria-label="ODS 5 Morelia — Volver al inicio"
               >
-                <BrandLogo size={38} showText={false} className="sm:hidden" />
-                <BrandLogo size={40} showText={true} compact={true} className="hidden sm:inline-flex" />
+                <BrandLogo size={34} showText={false} className="sm:hidden" />
+                <BrandLogo size={38} showText={true} compact={true} className="hidden sm:inline-flex" />
               </Link>
             ) : (
-              <BrandLogo size={42} showText={true} />
+              <>
+                <BrandLogo size={34} showText={false} className="sm:hidden" />
+                <BrandLogo size={40} showText={true} className="hidden sm:inline-flex" />
+              </>
             )}
 
             {(onGoHome || showHomeButton) &&
@@ -163,32 +166,32 @@ export default function TopBar({
                     playClick();
                     onGoHome();
                   }}
-                  className="min-h-[44px] px-3 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs inline-flex items-center gap-1.5 border border-slate-300 transition-colors"
+                  className="min-h-[40px] sm:min-h-[44px] px-2.5 sm:px-3 py-1.5 rounded-xl sm:rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs inline-flex items-center gap-1.5 border border-slate-300 transition-colors shrink-0"
                   aria-label="Volver al mapa de aventura (Inicio)"
                 >
                   <Home className="w-4 h-4 text-indigo-700" aria-hidden="true" />
-                  <span>Inicio</span>
+                  <span className="hidden sm:inline">Inicio</span>
                 </button>
               ) : (
                 <Link
                   href="/"
                   onClick={() => playClick()}
-                  className="min-h-[44px] px-3 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs inline-flex items-center gap-1.5 border border-slate-300 transition-colors"
+                  className="min-h-[40px] sm:min-h-[44px] px-2.5 sm:px-3 py-1.5 rounded-xl sm:rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-black text-xs inline-flex items-center gap-1.5 border border-slate-300 transition-colors shrink-0"
                   aria-label="Volver al mapa de aventura (Inicio)"
                 >
                   <Home className="w-4 h-4 text-indigo-700" aria-hidden="true" />
-                  <span>Inicio</span>
+                  <span className="hidden sm:inline">Inicio</span>
                 </Link>
               ))}
 
-            {/* Pill de cambio de edad */}
+            {/* Pill de cambio de edad (en móvil ya aparece en el encabezado del mundo) */}
             {onOpenAgeSelector && (
               <button
                 onClick={() => {
                   playClick();
                   onOpenAgeSelector();
                 }}
-                className="min-h-[44px] px-3 py-2 rounded-2xl bg-slate-100 hover:bg-indigo-50 text-slate-900 hover:text-indigo-950 font-black text-xs inline-flex items-center gap-1.5 border border-slate-300 hover:border-indigo-300 transition-colors"
+                className="hidden md:inline-flex min-h-[44px] px-3 py-2 rounded-2xl bg-slate-100 hover:bg-indigo-50 text-slate-900 hover:text-indigo-950 font-black text-xs items-center gap-1.5 border border-slate-300 hover:border-indigo-300 transition-colors shrink-0"
                 title="Cambiar grupo de edad"
                 aria-label="Cambiar rango de edad"
               >
@@ -201,35 +204,37 @@ export default function TopBar({
                 </span>
               </button>
             )}
-
-            <Link
-              href="/docentes"
-              onClick={() => playClick()}
-              className="min-h-[44px] px-3 py-2 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-950 font-bold text-xs inline-flex items-center gap-1.5 border border-indigo-200 transition-colors"
-              title="Guía pedagógica para docentes (solo lectura)"
-            >
-              <GraduationCap className="w-4 h-4 text-indigo-700" aria-hidden="true" />
-              <span className="hidden md:inline">Panel Docente</span>
-            </Link>
           </div>
 
-          {/* Derecha: Logros, Accesibilidad, Sonido, Necesito Ayuda */}
-          <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* Derecha: Logros, Panel Docente, Accesibilidad, Sonido, Necesito Ayuda en una sola fila limpia */}
+          <div className="flex items-center gap-1 sm:gap-2 justify-end shrink-0">
             {/* Álbum de logros adaptado a su nivel */}
             <button
               onClick={() => {
                 playClick();
                 setIsAlbumOpen(true);
               }}
-              className="min-h-[44px] px-3 py-2 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-950 font-black text-xs inline-flex items-center gap-1.5 border-2 border-amber-300 transition-colors"
+              className="min-h-[40px] sm:min-h-[44px] px-2 sm:px-3 py-1.5 rounded-xl sm:rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-950 font-black text-[11px] sm:text-xs inline-flex items-center gap-1 border-2 border-amber-300 transition-colors shrink-0"
               aria-label={`Abrir álbum de logros (${groupSummary.totalStars}/${groupSummary.maxStars} estrellas)`}
+              title="Álbum de Logros"
             >
-              <Trophy className="w-4 h-4 text-amber-700" aria-hidden="true" />
+              <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-700 shrink-0" aria-hidden="true" />
               <span>
-                {groupSummary.totalStars}/{groupSummary.maxStars} ⭐
+                {groupSummary.totalStars}/{groupSummary.maxStars}
               </span>
-              <span className="hidden sm:inline">Logros</span>
+              <span className="hidden sm:inline">⭐ Logros</span>
             </button>
+
+            <Link
+              href="/docentes"
+              onClick={() => playClick()}
+              className="min-h-[40px] sm:min-h-[44px] min-w-[40px] sm:min-w-[44px] px-2 sm:px-3 py-1.5 rounded-xl sm:rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-950 font-bold text-xs inline-flex items-center justify-center gap-1.5 border border-indigo-200 transition-colors shrink-0"
+              title="Guía pedagógica para docentes (solo lectura)"
+              aria-label="Panel Docente"
+            >
+              <GraduationCap className="w-4 h-4 text-indigo-700 shrink-0" aria-hidden="true" />
+              <span className="hidden lg:inline">Panel Docente</span>
+            </Link>
 
             {/* Accesibilidad */}
             <div className="relative" ref={a11yMenuRef}>
@@ -240,22 +245,23 @@ export default function TopBar({
                 }}
                 aria-expanded={isA11yOpen}
                 aria-haspopup="true"
-                className={`min-h-[44px] px-3 py-2 rounded-2xl font-bold text-xs inline-flex items-center gap-1.5 border transition-colors ${
+                className={`min-h-[40px] sm:min-h-[44px] min-w-[40px] sm:min-w-[44px] px-2 sm:px-3 py-1.5 rounded-xl sm:rounded-2xl font-bold text-xs inline-flex items-center justify-center gap-1.5 border transition-colors shrink-0 ${
                   largeText || highContrast || reducedMotion
                     ? "bg-indigo-600 text-white border-indigo-700"
                     : "bg-white hover:bg-slate-100 text-slate-700 border-slate-300"
                 }`}
                 aria-label="Opciones de accesibilidad"
+                title="Accesibilidad WCAG 2.1"
               >
-                <Accessibility className="w-4 h-4" aria-hidden="true" />
-                <span className="hidden sm:inline">Accesibilidad</span>
+                <Accessibility className="w-4 h-4 shrink-0" aria-hidden="true" />
+                <span className="hidden lg:inline">Accesibilidad</span>
               </button>
 
               {isA11yOpen && (
                 <div
                   role="menu"
                   aria-label="Controles de accesibilidad"
-                  className="fixed inset-x-3 top-24 sm:inset-auto sm:absolute sm:right-0 sm:mt-2 sm:w-64 bg-white rounded-2xl shadow-xl border-2 border-slate-200 p-3 space-y-2 z-50 animate-scaleUp"
+                  className="fixed inset-x-3 top-20 sm:inset-auto sm:absolute sm:right-0 sm:mt-2 sm:w-64 bg-white rounded-2xl shadow-xl border-2 border-slate-200 p-3 space-y-2 z-50 animate-scaleUp"
                 >
                   <p className="text-[11px] font-black uppercase tracking-wider text-slate-500 px-1">
                     Accesibilidad WCAG 2.1
@@ -323,16 +329,16 @@ export default function TopBar({
             {/* Sonido */}
             <button
               onClick={toggleMute}
-              className="min-h-[44px] min-w-[44px] px-3 py-2 rounded-2xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors"
+              className="min-h-[40px] sm:min-h-[44px] min-w-[40px] sm:min-w-[44px] px-2 sm:px-3 py-1.5 rounded-xl sm:rounded-2xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors shrink-0"
               aria-label={isMuted ? "Activar sonido" : "Silenciar sonido"}
               title={isMuted ? "Activar sonido" : "Silenciar sonido"}
             >
               {isMuted ? (
-                <VolumeX className="w-4 h-4 text-rose-600" />
+                <VolumeX className="w-4 h-4 text-rose-600 shrink-0" aria-hidden="true" />
               ) : (
-                <Volume2 className="w-4 h-4 text-emerald-600" />
+                <Volume2 className="w-4 h-4 text-emerald-600 shrink-0" aria-hidden="true" />
               )}
-              <span className="hidden md:inline">{isMuted ? "Silencio" : "Sonido"}</span>
+              <span className="hidden lg:inline">{isMuted ? "Silencio" : "Sonido"}</span>
             </button>
 
             {/* Botón permanente NECESITO AYUDA */}
@@ -341,11 +347,12 @@ export default function TopBar({
                 playClick();
                 setIsHelpOpen(true);
               }}
-              className="min-h-[44px] px-3.5 py-2 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-sm border-b-4 border-rose-800 active:border-b-0 active:translate-y-0.5 inline-flex items-center gap-1.5 transition-all"
+              className="min-h-[40px] sm:min-h-[44px] px-2.5 sm:px-3.5 py-1.5 rounded-xl sm:rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] sm:text-xs font-black shadow-sm border-b-4 border-rose-800 active:border-b-0 active:translate-y-0.5 inline-flex items-center gap-1 sm:gap-1.5 transition-all shrink-0"
               aria-label="Necesito ayuda: abrir directorio de apoyo en Morelia y México"
             >
-              <ShieldAlert className="w-4 h-4 shrink-0" />
-              <span>Necesito ayuda</span>
+              <ShieldAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" aria-hidden="true" />
+              <span className="sm:hidden">Ayuda</span>
+              <span className="hidden sm:inline">Necesito ayuda</span>
             </button>
           </div>
         </div>

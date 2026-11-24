@@ -264,7 +264,7 @@ function ValorGameplay({
 
             return (
               <div key={m.id} className="p-4 rounded-3xl border-2 border-slate-200 bg-slate-50/70 space-y-3 shadow-2xs">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5">
                     <span className="text-3xl">{m.avatar}</span>
                     <div>

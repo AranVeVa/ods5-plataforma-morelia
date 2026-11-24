@@ -108,7 +108,7 @@ function BalanzaGameplay({
           <span className="text-xs font-black uppercase text-slate-500 flex items-center gap-1">
             <Users2 className="w-4 h-4 text-blue-600" /> Elige a quiénes equilibrar:
           </span>
-          <div className="flex rounded-2xl bg-slate-100 p-1 border border-slate-200 text-xs font-bold">
+          <div className="flex flex-wrap rounded-2xl bg-slate-100 p-1 border border-slate-200 text-xs font-bold gap-1">
             <button
               onClick={() => handleSwitchMode("hijos")}
               className={`min-h-[40px] px-3.5 py-1.5 rounded-xl transition-all ${

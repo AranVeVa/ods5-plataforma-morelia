@@ -132,11 +132,12 @@ export default function Home() {
 
         <main id="main-content" tabIndex={-1} className="flex-1 max-w-5xl w-full mx-auto px-4 py-8 sm:py-12 flex flex-col items-center justify-center space-y-8 animate-fadeIn outline-none">
           {/* Bienvenida de Axo */}
-          <div className="text-center space-y-3 max-w-2xl">
+          <div className="flex flex-col items-center text-center space-y-3 max-w-2xl mx-auto">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-black">
-              <MapPin className="w-3.5 h-3.5" /> Morelia, Michoacán · Metas 5.2 y 5.4 ONU
+              <MapPin className="w-3.5 h-3.5 shrink-0" />
+              <span>Morelia, Michoacán · Metas 5.2 y 5.4 ONU</span>
             </div>
-            <div className="relative inline-block my-2">
+            <div className="relative flex justify-center my-2">
               <Mascot expression="celebrating" size={120} animate={true} />
             </div>
             <h1 className="text-3xl sm:text-5xl font-display font-black text-slate-900 tracking-tight">
@@ -389,7 +390,7 @@ export default function Home() {
                   </div>
 
                   {/* Nodos de progreso de estaciones */}
-                  <div className="flex items-center gap-2 bg-white/80 px-4 py-2.5 rounded-2xl border border-white shadow-xs shrink-0">
+                  <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 bg-white/80 px-3 sm:px-4 py-2 rounded-2xl border border-white shadow-xs shrink-0">
                     {worldGames.map((g, idx) => {
                       const gStars = progress[g.id]?.stars ?? 0;
                       return (
